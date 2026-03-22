@@ -5,7 +5,7 @@
  */
 
 import { Command } from "commander";
-import { cliService } from "../infrastructure/services/cli.service";
+import { cliService } from "../infrastructure/services/cli.service.js";
 import chalk from "chalk";
 
 const program = new Command();

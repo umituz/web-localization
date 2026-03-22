@@ -1,5 +1,4 @@
 import fs from "fs";
-import path from "path";
 
 /**
  * Parses a TypeScript file containing an object export

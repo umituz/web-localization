@@ -7,22 +7,22 @@ import type {
   TranslationRequest,
   TranslationResponse,
   TranslationStats,
-} from "../../domain/entities/translation.entity";
+} from "../../domain/entities/translation.entity.js";
 import type {
   ITranslationService,
   TranslationServiceConfig,
-} from "../../domain/interfaces/translation-service.interface";
-import { RateLimiter } from "../utils/rate-limit.util";
+} from "../../domain/interfaces/translation-service.interface.js";
+import { RateLimiter } from "../utils/rate-limit.util.js";
 import {
   shouldSkipWord,
   needsTranslation,
   isValidText,
-} from "../utils/text-validator.util";
+} from "../utils/text-validator.util.js";
 import {
   GOOGLE_TRANSLATE_API_URL,
   DEFAULT_MIN_DELAY,
   DEFAULT_TIMEOUT,
-} from "../constants";
+} from "../constants/index.js";
 
 class GoogleTranslateService implements ITranslationService {
   private config: TranslationServiceConfig | null = null;
