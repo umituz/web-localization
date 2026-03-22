@@ -28,6 +28,7 @@ export interface ITranslationService {
     targetLanguage: string,
     path?: string,
     stats?: TranslationStats,
-    onTranslate?: (key: string, from: string, to: string) => void
+    onTranslate?: (key: string, from: string, to: string) => void,
+    force?: boolean
   ): Promise<void>;
 }
