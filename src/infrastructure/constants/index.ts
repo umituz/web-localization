@@ -11,3 +11,7 @@ export const DEFAULT_TIMEOUT = 10000;
 export const DEFAULT_LOCALES_DIR = "src/locales";
 export const DEFAULT_SOURCE_DIR = "src";
 export const DEFAULT_BASE_LANGUAGE = "en-US";
+
+// Rate limiter defaults
+export const RATE_LIMIT_DEFAULT_DELAY = 100;
+export const RATE_LIMIT_MIN_DELAY = 0;

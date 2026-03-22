@@ -1,11 +1,12 @@
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
+import type { TranslationStats } from "../../domain/entities/translation.entity.js";
 import { googleTranslateService } from "./google-translate.service.js";
 import { parseTypeScriptFile, generateTypeScriptContent } from "../utils/file.util.js";
-import { 
-  DEFAULT_LOCALES_DIR, 
-  DEFAULT_BASE_LANGUAGE 
+import {
+  DEFAULT_LOCALES_DIR,
+  DEFAULT_BASE_LANGUAGE
 } from "../constants/index.js";
 
 export interface SyncOptions {
@@ -14,6 +15,32 @@ export interface SyncOptions {
   baseLang?: string;
   force?: boolean;
 }
+
+// Extracted outside loop for better performance
+const syncObject = (
+  source: Record<string, unknown>,
+  target: Record<string, unknown>
+): Record<string, unknown> => {
+  const result = { ...target };
+  for (const key in source) {
+    if (typeof source[key] === "object" && source[key] !== null) {
+      result[key] = syncObject(
+        source[key] as Record<string, unknown>,
+        (target[key] as Record<string, unknown>) || {}
+      );
+    } else if (target[key] === undefined) {
+      // Let empty string indicate untranslated state
+      result[key] = typeof source[key] === "string" ? "" : source[key];
+    }
+  }
+  // Remove extra keys
+  for (const key in target) {
+    if (source[key] === undefined) {
+      delete result[key];
+    }
+  }
+  return result;
+};
 
 export class CLIService {
   async sync(options: SyncOptions = {}): Promise<void> {
@@ -33,7 +60,7 @@ export class CLIService {
 
     const baseData = parseTypeScriptFile(baseLangPath);
     const files = fs.readdirSync(localesDir)
-      .filter(f => f.match(/^[a-z]{2}-[A-Z]{2}\.ts$/) && f !== `${baseLang}.ts`)
+      .filter(f => f.match(/^[a-z]{2}(-[A-Z]{2})?\.ts$/) && f !== `${baseLang}.ts`)
       .sort();
 
     console.log(chalk.blue(`📊 Found ${files.length} languages to sync with ${baseLang}.\n`));
@@ -41,30 +68,7 @@ export class CLIService {
     for (const file of files) {
       const targetPath = path.join(localesDir, file);
       const targetData = parseTypeScriptFile(targetPath);
-      const langCode = file.replace(".ts", "");
-
-      // Deep merge with base data structure
-      const syncObject = (source: Record<string, unknown>, target: Record<string, unknown>): Record<string, unknown> => {
-        const result = { ...target };
-        for (const key in source) {
-          if (typeof source[key] === "object" && source[key] !== null) {
-            result[key] = syncObject(
-              source[key] as Record<string, unknown>, 
-              (target[key] as Record<string, unknown>) || {}
-            );
-          } else if (target[key] === undefined) {
-             // Let empty string indicate untranslated state
-            result[key] = typeof source[key] === "string" ? "" : source[key];
-          }
-        }
-        // Remove extra keys
-        for (const key in target) {
-          if (source[key] === undefined) {
-            delete result[key];
-          }
-        }
-        return result;
-      };
+      const langCode = path.basename(file, ".ts");
 
       const syncedData = syncObject(baseData, targetData);
       fs.writeFileSync(targetPath, generateTypeScriptContent(syncedData, langCode));
@@ -87,7 +91,7 @@ export class CLIService {
     googleTranslateService.initialize({});
     const baseData = parseTypeScriptFile(baseLangPath);
     const files = fs.readdirSync(localesDir)
-      .filter(f => f.match(/^[a-z]{2}-[A-Z]{2}\.ts$/) && f !== `${baseLang}.ts`)
+      .filter(f => f.match(/^[a-z]{2}(-[A-Z]{2})?\.ts$/) && f !== `${baseLang}.ts`)
       .sort();
 
     console.log(chalk.blue.bold(`🚀 Starting automatic translation for ${files.length} languages...\n`));
@@ -95,9 +99,9 @@ export class CLIService {
     for (const file of files) {
       const targetPath = path.join(localesDir, file);
       const targetData = parseTypeScriptFile(targetPath);
-      const langCode = file.replace(".ts", "");
-      
-      const stats = {
+      const langCode = path.basename(file, ".ts");
+
+      const stats: TranslationStats = {
         totalCount: 0,
         successCount: 0,
         failureCount: 0,
@@ -107,10 +111,13 @@ export class CLIService {
 
       console.log(chalk.yellow(`🌍 Translating ${langCode}...`));
 
+      // Extract ISO 639-1 language code (e.g., "en" from "en-US")
+      const targetLang = langCode.includes("-") ? langCode.split("-")[0] : langCode;
+
       await googleTranslateService.translateObject(
         baseData,
         targetData,
-        langCode.split("-")[0], // ISO 639-1
+        targetLang,
         "",
         stats,
         (key, from, to) => {

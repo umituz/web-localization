@@ -3,23 +3,31 @@
  * @description Controls the frequency of API requests
  */
 
+import { RATE_LIMIT_DEFAULT_DELAY } from "../constants/index.js";
+
 export class RateLimiter {
   private lastRequestTime = 0;
-  private minDelay: number;
+  private readonly minDelay: number;
 
-  constructor(minDelay = 100) {
+  constructor(minDelay = RATE_LIMIT_DEFAULT_DELAY) {
+    if (minDelay < 0) {
+      throw new Error("minDelay must be non-negative");
+    }
     this.minDelay = minDelay;
   }
 
   async waitForSlot(): Promise<void> {
     const now = Date.now();
     const elapsedTime = now - this.lastRequestTime;
-    
+
     if (elapsedTime < this.minDelay) {
       const waitTime = this.minDelay - elapsedTime;
       await new Promise(resolve => setTimeout(resolve, waitTime));
+      // Set to the time when we can make the next request
+      this.lastRequestTime = Date.now();
+    } else {
+      // No wait needed, update to current time
+      this.lastRequestTime = now;
     }
-    
-    this.lastRequestTime = Date.now();
   }
 }

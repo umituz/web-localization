@@ -1,13 +1,21 @@
 import fs from "fs";
+import path from "path";
 
 /**
  * Parses a TypeScript file containing an object export
  * @description Simplistic parser for 'export default { ... }' or 'export const data = { ... }'
+ * @security Note: Uses Function constructor - only use with trusted local files
  */
 export function parseTypeScriptFile(filePath: string): Record<string, unknown> {
-  if (!fs.existsSync(filePath)) return {};
+  // Validate file path is within project directory
+  const resolvedPath = path.resolve(filePath);
+  if (!resolvedPath.startsWith(process.cwd())) {
+    throw new Error(`Security: File path outside project directory: ${filePath}`);
+  }
+
+  if (!fs.existsSync(resolvedPath)) return {};
   
-  const content = fs.readFileSync(filePath, "utf-8");
+  const content = fs.readFileSync(resolvedPath, "utf-8");
   
   // Extract the object part
   // This is a naive implementation, but matches the pattern used in the project
