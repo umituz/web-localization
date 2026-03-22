@@ -42,7 +42,8 @@
     "ts-morph": "^27.0.2",
     "i18next": "^23.11.2",
     "react-i18next": "^14.1.1",
-    "i18next-browser-languagedetector": "^7.2.1"
+    "i18next-browser-languagedetector": "^7.2.1",
+    "@umituz/web-seo": "file:../web-seo"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

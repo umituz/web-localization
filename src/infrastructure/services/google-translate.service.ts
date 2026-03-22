@@ -172,7 +172,8 @@ class GoogleTranslateService implements ITranslationService {
       skippedCount: 0,
       translatedKeys: [],
     },
-    onTranslate?: (key: string, from: string, to: string) => void
+    onTranslate?: (key: string, from: string, to: string) => void,
+    force = false
   ): Promise<void> {
     if (!sourceObject || typeof sourceObject !== "object") return;
     if (!targetObject || typeof targetObject !== "object") return;
@@ -196,11 +197,12 @@ class GoogleTranslateService implements ITranslationService {
           targetLanguage,
           currentPath,
           stats,
-          onTranslate
+          onTranslate,
+          force
         );
       } else if (typeof enValue === "string") {
         stats.totalCount++;
-        if (needsTranslation(targetValue, enValue)) {
+        if (force || needsTranslation(targetValue, enValue)) {
           textsToTranslate.push({key, enValue, currentPath});
         } else {
           stats.skippedCount++;
@@ -226,8 +228,11 @@ class GoogleTranslateService implements ITranslationService {
 
           if (translatedItem && translatedItem.from === enValue && translatedItem.to !== enValue) {
             targetObject[key] = translatedItem.to;
+            stats.successCount++;
             if (onTranslate) onTranslate(currentPath, enValue, translatedItem.to);
             resultIndex++;
+          } else {
+            stats.failureCount++;
           }
         }
       }
