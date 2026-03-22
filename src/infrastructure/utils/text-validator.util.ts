@@ -23,7 +23,7 @@ export function shouldSkipWord(text: string): boolean {
 /**
  * Determines if a key needs translation
  */
-export function needsTranslation(targetValue: unknown, sourceValue: string): boolean {
+export function needsTranslation(targetValue: unknown, _sourceValue: string): boolean {
   if (typeof targetValue !== "string") return true;
   if (targetValue.length === 0) return true; // Empty string means untranslated
   // Do NOT return true if target === source anymore, to avoid infinite translations for words that are identical in both languages

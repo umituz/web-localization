@@ -4,11 +4,11 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import { initSEO } from '@umituz/web-seo';
 
 export interface SetupI18nOptions {
-  resources: Record<string, { translation: any }>;
+  resources: Record<string, { translation: Record<string, unknown> }>;
   defaultLng?: string;
   fallbackLng?: string;
   onInit?: (instance: typeof i18n) => void;
-  detection?: any;
+  detection?: Record<string, unknown>;
   seo?: {
     titleKey: string;
     descriptionKey: string;

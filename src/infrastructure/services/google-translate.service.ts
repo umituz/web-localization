@@ -221,16 +221,19 @@ class GoogleTranslateService implements ITranslationService {
           }))
         );
 
+        const translatedItems = results.translatedKeys;
         let resultIndex = 0;
         for (let j = 0; j < batch.length; j++) {
           const {key, enValue, currentPath} = batch[j];
-          const translatedItem = results.translatedKeys[resultIndex];
+
+          // Find matching translation item
+          const translatedItem = translatedItems[resultIndex];
+          resultIndex++;
 
           if (translatedItem && translatedItem.from === enValue && translatedItem.to !== enValue) {
             targetObject[key] = translatedItem.to;
             stats.successCount++;
             if (onTranslate) onTranslate(currentPath, enValue, translatedItem.to);
-            resultIndex++;
           } else {
             stats.failureCount++;
           }
@@ -251,7 +254,7 @@ class GoogleTranslateService implements ITranslationService {
     let counter = 0;
     
     // Find all {{something}} patterns
-    let safeText = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
+    const safeText = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
       const placeholder = `_VAR${counter}_`; // Using a simple token less likely to be split
       varMap.set(placeholder, match);
       counter++;
@@ -294,7 +297,7 @@ class GoogleTranslateService implements ITranslationService {
           data[0].length > 0 &&
         typeof data[0][0][0] === "string"
         ) {
-          translatedStr = data[0].map((item: any) => item[0]).join('');
+          translatedStr = data[0].map((item: unknown[]) => item[0] as string).join('');
         }
 
         // 2. Re-inject Variables
