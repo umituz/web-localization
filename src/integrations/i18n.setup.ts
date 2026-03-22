@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { initSEO } from '@umituz/web-seo';
 
 export interface SetupI18nOptions {
   resources: Record<string, { translation: any }>;
@@ -8,11 +9,17 @@ export interface SetupI18nOptions {
   fallbackLng?: string;
   onInit?: (instance: typeof i18n) => void;
   detection?: any;
+  seo?: {
+    titleKey: string;
+    descriptionKey: string;
+    defaultImage?: string;
+    twitterHandle?: string;
+  };
 }
 
 /**
  * Static i18n initialization to simplify main app code.
- * @description All common configuration is hidden inside this package.
+ * @description All common configuration including SEO integration is hidden inside this package.
  */
 export function setupI18n(options: SetupI18nOptions) {
   const {
@@ -23,7 +30,8 @@ export function setupI18n(options: SetupI18nOptions) {
     detection = {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-    }
+    },
+    seo,
   } = options;
 
   i18n
@@ -39,6 +47,12 @@ export function setupI18n(options: SetupI18nOptions) {
       detection,
     })
     .then(() => {
+      if (seo) {
+        initSEO({
+          i18n,
+          ...seo,
+        });
+      }
       if (onInit) onInit(i18n);
     });
 

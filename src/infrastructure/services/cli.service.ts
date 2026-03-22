@@ -12,6 +12,7 @@ export interface SyncOptions {
   localesDir?: string;
   sourceDir?: string;
   baseLang?: string;
+  force?: boolean;
 }
 
 export class CLIService {
@@ -114,7 +115,8 @@ export class CLIService {
         stats,
         (key, from, to) => {
           process.stdout.write(chalk.gray(`   • ${key}: ${from.substring(0, 15)}... → ${to.substring(0, 15)}...\r`));
-        }
+        },
+        options.force
       );
 
       if (stats.successCount > 0) {

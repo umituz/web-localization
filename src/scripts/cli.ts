@@ -34,6 +34,7 @@ program
   .description("Automatically translate missing strings using Google Translate")
   .option("-d, --locales-dir <dir>", "Directory containing locale files", "src/locales")
   .option("-b, --base-lang <lang>", "Base language code", "en-US")
+  .option("-f, --force", "Force re-translation of all strings", false)
   .action(async (options) => {
     try {
       await cliService.translate(options);
