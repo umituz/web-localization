@@ -11,6 +11,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "noEmit": false,
+    "outDir": "dist",
     "baseUrl": "./",
     "paths": {
       "@/*": ["src/*"]

@@ -7,7 +7,7 @@
   "sideEffects": false,
   "type": "module",
   "bin": {
-    "web-loc": "./src/scripts/cli.ts"
+    "web-loc": "./dist/scripts/cli.js"
   },
   "exports": {
     ".": "./src/index.ts",
