@@ -22,11 +22,12 @@ import {
   GOOGLE_TRANSLATE_API_URL,
   DEFAULT_MIN_DELAY,
   DEFAULT_TIMEOUT,
+  DEFAULT_MAX_RETRIES,
 } from "../constants/index.js";
 
 class GoogleTranslateService implements ITranslationService {
   private config: TranslationServiceConfig | null = null;
-  private rateLimiter: RateLimiter | null = null;
+  private _rateLimiter: RateLimiter | null = null;
 
   initialize(config: TranslationServiceConfig): void {
     this.config = {
@@ -34,11 +35,18 @@ class GoogleTranslateService implements ITranslationService {
       timeout: DEFAULT_TIMEOUT,
       ...config,
     };
-    this.rateLimiter = new RateLimiter(this.config.minDelay);
+    this._rateLimiter = new RateLimiter(this.config.minDelay);
   }
 
   isInitialized(): boolean {
-    return this.config !== null && this.rateLimiter !== null;
+    return this.config !== null && this._rateLimiter !== null;
+  }
+
+  private get rateLimiter(): RateLimiter {
+    if (!this._rateLimiter) {
+      throw new Error("RateLimiter not initialized");
+    }
+    return this._rateLimiter;
   }
 
   private ensureInitialized(): void {
@@ -75,7 +83,7 @@ class GoogleTranslateService implements ITranslationService {
       };
     }
 
-    await this.rateLimiter!.waitForSlot();
+    await this.rateLimiter.waitForSlot();
 
     try {
       const translatedText = await this.callTranslateAPI(
@@ -127,9 +135,9 @@ class GoogleTranslateService implements ITranslationService {
     }
 
     for (const chunk of chunks) {
-      const results = await Promise.all(
+      const results = await Promise.allSettled(
         chunk.map(async (request) => {
-          await this.rateLimiter!.waitForSlot();
+          await this.rateLimiter.waitForSlot();
           return this.callTranslateAPI(
             request.text,
             request.targetLanguage,
@@ -140,19 +148,22 @@ class GoogleTranslateService implements ITranslationService {
 
       for (let i = 0; i < chunk.length; i++) {
         const request = chunk[i];
-        const translatedText = results[i];
+        const result = results[i];
 
-        if (translatedText && translatedText !== request.text) {
-          stats.successCount++;
-          stats.translatedKeys.push({
-            key: request.text,
-            from: request.text,
-            to: translatedText,
-          });
-        } else if (!translatedText) {
-          stats.failureCount++;
+        if (result.status === "fulfilled") {
+          const translatedText = result.value;
+          if (translatedText && translatedText !== request.text) {
+            stats.successCount++;
+            stats.translatedKeys.push({
+              key: request.text,
+              from: request.text,
+              to: translatedText,
+            });
+          } else {
+            stats.skippedCount++;
+          }
         } else {
-          stats.skippedCount++;
+          stats.failureCount++;
         }
       }
     }
@@ -221,19 +232,20 @@ class GoogleTranslateService implements ITranslationService {
           }))
         );
 
-        const translatedItems = results.translatedKeys;
-        let resultIndex = 0;
+        // Create a map for quick lookup of translations
+        const translationMap = new Map<string, string>();
+        for (const item of results.translatedKeys) {
+          translationMap.set(item.from, item.to);
+        }
+
         for (let j = 0; j < batch.length; j++) {
           const {key, enValue, currentPath} = batch[j];
+          const translatedText = translationMap.get(enValue);
 
-          // Find matching translation item
-          const translatedItem = translatedItems[resultIndex];
-          resultIndex++;
-
-          if (translatedItem && translatedItem.from === enValue && translatedItem.to !== enValue) {
-            targetObject[key] = translatedItem.to;
+          if (translatedText && translatedText !== enValue) {
+            targetObject[key] = translatedText;
             stats.successCount++;
-            if (onTranslate) onTranslate(currentPath, enValue, translatedItem.to);
+            if (onTranslate) onTranslate(currentPath, enValue, translatedText);
           } else {
             stats.failureCount++;
           }
@@ -246,7 +258,7 @@ class GoogleTranslateService implements ITranslationService {
     text: string,
     targetLanguage: string,
     sourceLanguage: string,
-    retries = 3,
+    retries = DEFAULT_MAX_RETRIES,
     backoffMs = 2000
   ): Promise<string> {
     // 1. Variable Protection (Extract {{variables}})
@@ -265,7 +277,7 @@ class GoogleTranslateService implements ITranslationService {
     const encodedText = encodeURIComponent(safeText);
     const url = `${GOOGLE_TRANSLATE_API_URL}?client=gtx&sl=${sourceLanguage}&tl=${targetLanguage}&dt=t&q=${encodedText}`;
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
+    for (let attempt = 0; attempt < retries; attempt++) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -276,7 +288,7 @@ class GoogleTranslateService implements ITranslationService {
 
         if (!response.ok) {
           if (response.status === 429 || response.status >= 500) {
-            if (attempt < retries) {
+            if (attempt < retries - 1) {
               clearTimeout(timeoutId);
               // Exponential backoff
               const delay = backoffMs * Math.pow(2, attempt);

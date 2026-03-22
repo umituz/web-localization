@@ -2,6 +2,10 @@
  * Text Validation Utilities
  */
 
+// Default words/patterns to skip during translation
+const DEFAULT_SKIPLIST = ["@umituz"] as const;
+const skiplist = [...DEFAULT_SKIPLIST];
+
 /**
  * Validates if the text is suitable for translation
  */
@@ -16,7 +20,6 @@ export function isValidText(text: unknown): text is string {
  * Checks if a word should be skipped (e.g., proper nouns, symbols)
  */
 export function shouldSkipWord(text: string): boolean {
-  const skiplist = ["@umituz"];
   return skiplist.some(word => text.includes(word));
 }
 

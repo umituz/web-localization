@@ -3,12 +3,19 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initSEO } from '@umituz/web-seo';
 
+export interface DetectionOptions {
+  order?: string[];
+  caches?: string[];
+  lookupLocalStorage?: string;
+  lookupSessionstorage?: string;
+}
+
 export interface SetupI18nOptions {
   resources: Record<string, { translation: Record<string, unknown> }>;
   defaultLng?: string;
   fallbackLng?: string;
   onInit?: (instance: typeof i18n) => void;
-  detection?: Record<string, unknown>;
+  detection?: DetectionOptions;
   seo?: {
     titleKey: string;
     descriptionKey: string;
@@ -21,7 +28,7 @@ export interface SetupI18nOptions {
  * Static i18n initialization to simplify main app code.
  * @description All common configuration including SEO integration is hidden inside this package.
  */
-export function setupI18n(options: SetupI18nOptions) {
+export function setupI18n(options: SetupI18nOptions): typeof i18n {
   const {
     resources,
     defaultLng = 'en-US',
@@ -54,9 +61,11 @@ export function setupI18n(options: SetupI18nOptions) {
         });
       }
       if (onInit) onInit(i18n);
+    })
+    .catch((error) => {
+      console.error('Failed to initialize i18n:', error);
+      throw error;
     });
 
   return i18n;
 }
-
-export default i18n;
