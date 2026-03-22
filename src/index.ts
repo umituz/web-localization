@@ -9,3 +9,4 @@ export * from "./infrastructure/services/google-translate.service";
 export * from "./infrastructure/constants";
 export * from "./infrastructure/utils/text-validator.util";
 export * from "./infrastructure/utils/rate-limit.util";
+export * from "./integrations/i18n.setup";
