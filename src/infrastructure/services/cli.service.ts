@@ -1,13 +1,12 @@
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
-import { googleTranslateService } from "./google-translate.service";
-import { parseTypeScriptFile, generateTypeScriptContent } from "../utils/file.util";
+import { googleTranslateService } from "./google-translate.service.js";
+import { parseTypeScriptFile, generateTypeScriptContent } from "../utils/file.util.js";
 import { 
   DEFAULT_LOCALES_DIR, 
-  DEFAULT_SOURCE_DIR, 
   DEFAULT_BASE_LANGUAGE 
-} from "../constants";
+} from "../constants/index.js";
 
 export interface SyncOptions {
   localesDir?: string;
@@ -44,11 +43,14 @@ export class CLIService {
       const langCode = file.replace(".ts", "");
 
       // Deep merge with base data structure
-      const syncObject = (source: any, target: any) => {
+      const syncObject = (source: Record<string, unknown>, target: Record<string, unknown>): Record<string, unknown> => {
         const result = { ...target };
         for (const key in source) {
           if (typeof source[key] === "object" && source[key] !== null) {
-            result[key] = syncObject(source[key], target[key] || {});
+            result[key] = syncObject(
+              source[key] as Record<string, unknown>, 
+              (target[key] as Record<string, unknown>) || {}
+            );
           } else if (target[key] === undefined) {
             result[key] = source[key];
           }
