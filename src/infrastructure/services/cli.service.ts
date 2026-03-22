@@ -52,7 +52,8 @@ export class CLIService {
               (target[key] as Record<string, unknown>) || {}
             );
           } else if (target[key] === undefined) {
-            result[key] = source[key];
+             // Let empty string indicate untranslated state
+            result[key] = typeof source[key] === "string" ? "" : source[key];
           }
         }
         // Remove extra keys

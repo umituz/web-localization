@@ -237,41 +237,84 @@ class GoogleTranslateService implements ITranslationService {
   private async callTranslateAPI(
     text: string,
     targetLanguage: string,
-    sourceLanguage: string
+    sourceLanguage: string,
+    retries = 3,
+    backoffMs = 2000
   ): Promise<string> {
+    // 1. Variable Protection (Extract {{variables}})
+    const varMap = new Map<string, string>();
+    let counter = 0;
+    
+    // Find all {{something}} patterns
+    let safeText = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
+      const placeholder = `_VAR${counter}_`; // Using a simple token less likely to be split
+      varMap.set(placeholder, match);
+      counter++;
+      return placeholder;
+    });
+
     const timeout = this.config?.timeout || DEFAULT_TIMEOUT;
-    const encodedText = encodeURIComponent(text);
+    const encodedText = encodeURIComponent(safeText);
     const url = `${GOOGLE_TRANSLATE_API_URL}?client=gtx&sl=${sourceLanguage}&tl=${targetLanguage}&dt=t&q=${encodedText}`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-      });
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
+        if (!response.ok) {
+          if (response.status === 429 || response.status >= 500) {
+            if (attempt < retries) {
+              clearTimeout(timeoutId);
+              // Exponential backoff
+              const delay = backoffMs * Math.pow(2, attempt);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          throw new Error(`API request failed: ${response.status}`);
+        }
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (
-        Array.isArray(data) &&
-        data.length > 0 &&
-        Array.isArray(data[0]) &&
-        data[0].length > 0 &&
-        Array.isArray(data[0][0]) &&
+        let translatedStr = safeText;
+        if (
+          Array.isArray(data) &&
+          data.length > 0 &&
+          Array.isArray(data[0]) &&
+          data[0].length > 0 &&
         typeof data[0][0][0] === "string"
-      ) {
-        return data[0][0][0];
-      }
+        ) {
+          translatedStr = data[0].map((item: any) => item[0]).join('');
+        }
 
-      return text;
-    } finally {
-      clearTimeout(timeoutId);
+        // 2. Re-inject Variables
+        if (varMap.size > 0) {
+          // Sometimes Google adds spaces, like _VAR0_ -> _ VAR0 _
+          for (const [placeholder, originalVar] of varMap.entries()) {
+            const regex = new RegExp(placeholder.split('').join('\\s*'), 'g');
+            translatedStr = translatedStr.replace(regex, originalVar);
+          }
+        }
+
+        return translatedStr;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (attempt === retries) {
+          throw error;
+        }
+        const delay = backoffMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+    
+    return text;
   }
 }
 
