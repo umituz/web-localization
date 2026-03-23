@@ -1,0 +1,58 @@
+{
+  "translation": {
+    "app": {
+      "title": "Your App Name",
+      "description": "Your app description goes here"
+    },
+    "nav": {
+      "home": "Home",
+      "about": "About",
+      "contact": "Contact",
+      "pricing": "Pricing",
+      "dashboard": "Dashboard",
+      "login": "Login",
+      "signup": "Sign Up"
+    },
+    "hero": {
+      "title": "Welcome to Our App",
+      "subtitle": "Build something amazing today",
+      "cta": "Get Started",
+      "secondaryCta": "Learn More"
+    },
+    "features": {
+      "title": "Key Features",
+      "feature1": {
+        "title": "Feature One",
+        "description": "Description of feature one"
+      },
+      "feature2": {
+        "title": "Feature Two",
+        "description": "Description of feature two"
+      },
+      "feature3": {
+        "title": "Feature Three",
+        "description": "Description of feature three"
+      }
+    },
+    "common": {
+      "loading": "Loading...",
+      "error": "An error occurred",
+      "success": "Success!",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "save": "Save",
+      "delete": "Delete",
+      "edit": "Edit",
+      "close": "Close",
+      "back": "Back",
+      "next": "Next",
+      "previous": "Previous"
+    },
+    "footer": {
+      "copyright": "© {{year}} Your Company. All rights reserved.",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "about": "About Us"
+    }
+  }
+}

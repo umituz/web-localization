@@ -9,7 +9,6 @@ import type {
  */
 export interface TranslationServiceConfig {
   minDelay?: number;
-  maxRetries?: number;
   timeout?: number;
   apiKey?: string; // Optional if using public API
 }
