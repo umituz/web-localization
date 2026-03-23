@@ -3,13 +3,13 @@
  * @description Controls the frequency of API requests
  */
 
-import { RATE_LIMIT_DEFAULT_DELAY } from "../constants/index.js";
+import { DEFAULT_MIN_DELAY } from "../constants/index.js";
 
 export class RateLimiter {
   private lastRequestTime = 0;
   private readonly minDelay: number;
 
-  constructor(minDelay = RATE_LIMIT_DEFAULT_DELAY) {
+  constructor(minDelay = DEFAULT_MIN_DELAY) {
     if (minDelay < 0) {
       throw new Error("minDelay must be non-negative");
     }

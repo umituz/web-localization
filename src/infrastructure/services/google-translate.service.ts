@@ -23,6 +23,8 @@ import {
   DEFAULT_MIN_DELAY,
   DEFAULT_TIMEOUT,
   DEFAULT_MAX_RETRIES,
+  TRANSLATION_BATCH_SIZE,
+  TRANSLATION_CONCURRENCY_LIMIT,
 } from "../constants/index.js";
 
 class GoogleTranslateService implements ITranslationService {
@@ -127,11 +129,10 @@ class GoogleTranslateService implements ITranslationService {
     }
 
     // Process requests concurrently with controlled parallelism
-    const concurrencyLimit = 10;
     const chunks: TranslationRequest[][] = [];
 
-    for (let i = 0; i < requests.length; i += concurrencyLimit) {
-      chunks.push(requests.slice(i, i + concurrencyLimit));
+    for (let i = 0; i < requests.length; i += TRANSLATION_CONCURRENCY_LIMIT) {
+      chunks.push(requests.slice(i, i + TRANSLATION_CONCURRENCY_LIMIT));
     }
 
     for (const chunk of chunks) {
@@ -213,7 +214,7 @@ class GoogleTranslateService implements ITranslationService {
         );
       } else if (typeof enValue === "string") {
         stats.totalCount++;
-        if (force || needsTranslation(targetValue, enValue)) {
+        if (force || needsTranslation(targetValue)) {
           textsToTranslate.push({key, enValue, currentPath});
         } else {
           stats.skippedCount++;
@@ -222,9 +223,8 @@ class GoogleTranslateService implements ITranslationService {
     }
 
     if (textsToTranslate.length > 0) {
-      const batchSize = 50;
-      for (let i = 0; i < textsToTranslate.length; i += batchSize) {
-        const batch = textsToTranslate.slice(i, i + batchSize);
+      for (let i = 0; i < textsToTranslate.length; i += TRANSLATION_BATCH_SIZE) {
+        const batch = textsToTranslate.slice(i, i + TRANSLATION_BATCH_SIZE);
         const results = await this.translateBatch(
           batch.map(item => ({
             text: item.enValue,
@@ -324,7 +324,7 @@ class GoogleTranslateService implements ITranslationService {
         return translatedStr;
       } catch (error) {
         clearTimeout(timeoutId);
-        if (attempt === retries) {
+        if (attempt === retries - 1) {
           throw error;
         }
         const delay = backoffMs * Math.pow(2, attempt);

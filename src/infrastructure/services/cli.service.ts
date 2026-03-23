@@ -129,6 +129,8 @@ export class CLIService {
       if (stats.successCount > 0) {
         fs.writeFileSync(targetPath, generateTypeScriptContent(targetData, langCode));
         console.log(chalk.green(`   ✅ Successfully translated ${stats.successCount} keys.`));
+      } else if (stats.failureCount > 0) {
+        console.log(chalk.red(`   ❌ Failed to translate ${stats.failureCount} keys.`));
       } else {
         console.log(chalk.gray("   ✨ Already up to date."));
       }
