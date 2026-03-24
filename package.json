@@ -1,6 +1,6 @@
 {
   "name": "@umituz/web-localization",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Google Translate integrated localization package for web applications",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -30,6 +30,14 @@
   ],
   "author": "umituz",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/umituz/web-localization"
+  },
+  "bugs": {
+    "url": "https://github.com/umituz/web-localization/issues"
+  },
+  "homepage": "https://github.com/umituz/web-localization#readme",
   "publishConfig": {
     "access": "public"
   },
