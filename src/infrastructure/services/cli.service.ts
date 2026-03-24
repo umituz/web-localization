@@ -6,7 +6,8 @@ import { googleTranslateService } from "./google-translate.service.js";
 import { parseTypeScriptFile, generateTypeScriptContent } from "../utils/file.util.js";
 import {
   DEFAULT_LOCALES_DIR,
-  DEFAULT_BASE_LANGUAGE
+  DEFAULT_BASE_LANGUAGE,
+  TRANSLATION_CONCURRENCY_LIMIT,
 } from "../constants/index.js";
 
 export interface SyncOptions {
@@ -14,6 +15,48 @@ export interface SyncOptions {
   sourceDir?: string;
   baseLang?: string;
   force?: boolean;
+  concurrency?: number;
+}
+
+/**
+ * Semaphore for controlling concurrent operations
+ */
+class Semaphore {
+  private permits: number;
+  private queue: Array<() => void> = [];
+
+  constructor(permits: number) {
+    this.permits = permits;
+  }
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--;
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+
+  release(): void {
+    this.permits++;
+    const next = this.queue.shift();
+    if (next) {
+      this.permits--;
+      next();
+    }
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
 }
 
 // Extracted outside loop for better performance
@@ -59,21 +102,34 @@ export class CLIService {
     }
 
     const baseData = parseTypeScriptFile(baseLangPath);
+
+    // Pre-compile regex for better performance
+    const localeFileRegex = /^[a-z]{2}(-[A-Z]{2})?\.ts$/;
     const files = fs.readdirSync(localesDir)
-      .filter(f => f.match(/^[a-z]{2}(-[A-Z]{2})?\.ts$/) && f !== `${baseLang}.ts`)
+      .filter(f => localeFileRegex.test(f) && f !== `${baseLang}.ts`)
       .sort();
 
     console.log(chalk.blue(`📊 Found ${files.length} languages to sync with ${baseLang}.\n`));
 
-    for (const file of files) {
-      const targetPath = path.join(localesDir, file);
-      const targetData = parseTypeScriptFile(targetPath);
-      const langCode = path.basename(file, ".ts");
+    // Process files in parallel with controlled concurrency
+    const concurrency = options.concurrency || TRANSLATION_CONCURRENCY_LIMIT;
+    const semaphore = new Semaphore(concurrency);
 
-      const syncedData = syncObject(baseData, targetData);
-      fs.writeFileSync(targetPath, generateTypeScriptContent(syncedData, langCode));
-      console.log(chalk.green(`   🌍 ${langCode}: Synced structure.`));
-    }
+    const syncPromises = files.map(async (file) => {
+      return semaphore.run(async () => {
+        const targetPath = path.join(localesDir, file);
+        const targetData = parseTypeScriptFile(targetPath);
+        const langCode = path.basename(file, ".ts");
+
+        const syncedData = syncObject(baseData, targetData);
+        fs.writeFileSync(targetPath, generateTypeScriptContent(syncedData, langCode));
+
+        // Non-blocking progress update
+        process.stdout.write(chalk.green(`   🌍 ${langCode}: Synced structure.\n`));
+      });
+    });
+
+    await Promise.all(syncPromises);
 
     console.log(chalk.bold.green("\n✅ Synchronization completed!"));
   }
@@ -90,53 +146,99 @@ export class CLIService {
 
     googleTranslateService.initialize({});
     const baseData = parseTypeScriptFile(baseLangPath);
+
+    // Pre-compile regex for better performance
+    const localeFileRegex = /^[a-z]{2}(-[A-Z]{2})?\.ts$/;
     const files = fs.readdirSync(localesDir)
-      .filter(f => f.match(/^[a-z]{2}(-[A-Z]{2})?\.ts$/) && f !== `${baseLang}.ts`)
+      .filter(f => localeFileRegex.test(f) && f !== `${baseLang}.ts`)
       .sort();
 
     console.log(chalk.blue.bold(`🚀 Starting automatic translation for ${files.length} languages...\n`));
 
-    for (const file of files) {
-      const targetPath = path.join(localesDir, file);
-      const targetData = parseTypeScriptFile(targetPath);
-      const langCode = path.basename(file, ".ts");
+    // Process languages in parallel with controlled concurrency
+    const concurrency = options.concurrency || TRANSLATION_CONCURRENCY_LIMIT;
+    const semaphore = new Semaphore(concurrency);
 
-      const stats: TranslationStats = {
-        totalCount: 0,
-        successCount: 0,
-        failureCount: 0,
-        skippedCount: 0,
-        translatedKeys: []
-      };
+    // Shared statistics tracking
+    const totalStats = {
+      totalLanguages: files.length,
+      completedLanguages: 0,
+      totalSuccess: 0,
+      totalFailure: 0,
+    };
 
-      console.log(chalk.yellow(`🌍 Translating ${langCode}...`));
+    const translatePromises = files.map(async (file) => {
+      return semaphore.run(async () => {
+        const targetPath = path.join(localesDir, file);
+        const targetData = parseTypeScriptFile(targetPath);
+        const langCode = path.basename(file, ".ts");
 
-      // Extract ISO 639-1 language code (e.g., "en" from "en-US")
-      const targetLang = langCode.includes("-") ? langCode.split("-")[0] : langCode;
+        const stats: TranslationStats = {
+          totalCount: 0,
+          successCount: 0,
+          failureCount: 0,
+          skippedCount: 0,
+          translatedKeys: []
+        };
 
-      await googleTranslateService.translateObject(
-        baseData,
-        targetData,
-        targetLang,
-        "",
-        stats,
-        (key, from, to) => {
-          process.stdout.write(chalk.gray(`   • ${key}: ${from.substring(0, 15)}... → ${to.substring(0, 15)}...\r`));
-        },
-        options.force
-      );
+        // Non-blocking progress update with language name
+        const langName = langCode.padEnd(6);
+        process.stdout.write(chalk.yellow(`🌍 Translating ${langName}...\n`));
 
-      if (stats.successCount > 0) {
-        fs.writeFileSync(targetPath, generateTypeScriptContent(targetData, langCode));
-        console.log(chalk.green(`   ✅ Successfully translated ${stats.successCount} keys.`));
-      } else if (stats.failureCount > 0) {
-        console.log(chalk.red(`   ❌ Failed to translate ${stats.failureCount} keys.`));
-      } else {
-        console.log(chalk.gray("   ✨ Already up to date."));
-      }
+        try {
+          // Extract ISO 639-1 language code (e.g., "en" from "en-US")
+          const targetLang = langCode.includes("-") ? langCode.split("-")[0] : langCode;
+
+          await googleTranslateService.translateObject(
+            baseData,
+            targetData,
+            targetLang,
+            "",
+            stats,
+            (_key, _from, _to) => {
+              // Non-blocking per-key progress (only in verbose mode or for debugging)
+              // Commented out to reduce console spam
+              // process.stdout.write(chalk.gray(`   • ${key}: ${from.substring(0, 15)}... → ${to.substring(0, 15)}...\r`));
+            },
+            options.force
+          );
+
+          // Write translated content
+          if (stats.successCount > 0) {
+            fs.writeFileSync(targetPath, generateTypeScriptContent(targetData, langCode));
+            totalStats.totalSuccess += stats.successCount;
+            process.stdout.write(chalk.green(`   ✅ ${langName} Successfully translated ${stats.successCount} keys.\n`));
+          } else if (stats.failureCount > 0) {
+            totalStats.totalFailure += stats.failureCount;
+            process.stdout.write(chalk.red(`   ❌ ${langName} Failed to translate ${stats.failureCount} keys.\n`));
+          } else {
+            process.stdout.write(chalk.gray(`   ✨ ${langName} Already up to date.\n`));
+          }
+        } catch (error) {
+          totalStats.totalFailure += stats.failureCount;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          process.stdout.write(chalk.red(`   ❌ ${langName} Error: ${errorMsg}\n`));
+        } finally {
+          totalStats.completedLanguages++;
+        }
+      });
+    });
+
+    await Promise.all(translatePromises);
+
+    // Final summary
+    console.log(chalk.bold.green("\n✅ All translations completed!"));
+    console.log(chalk.gray(`   📊 Processed ${totalStats.completedLanguages}/${totalStats.totalLanguages} languages`));
+    if (totalStats.totalSuccess > 0) {
+      console.log(chalk.green(`   ✅ Total keys translated: ${totalStats.totalSuccess}`));
+    }
+    if (totalStats.totalFailure > 0) {
+      console.log(chalk.red(`   ❌ Total keys failed: ${totalStats.totalFailure}`));
     }
 
-    console.log(chalk.bold.green("\n✅ All translations completed!"));
+    // Display cache statistics
+    const cacheStats = googleTranslateService.getCacheStats();
+    console.log(chalk.gray(`   💾 Cache hit rate: ${cacheStats.size}/${cacheStats.maxSize}`));
   }
 }
 
