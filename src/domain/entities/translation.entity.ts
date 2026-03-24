@@ -16,6 +16,7 @@ export interface TranslationResponse {
   readonly targetLanguage: string;
   readonly success: boolean;
   readonly error?: string;
+  readonly cached?: boolean;
 }
 
 export interface TranslationItem {
