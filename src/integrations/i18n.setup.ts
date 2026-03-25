@@ -105,7 +105,7 @@ export function setupI18n(options: SetupI18nOptions): typeof i18n {
 
       // React-specific optimizations
       react: {
-        useSuspense: false, // Disable suspense for better performance
+        useSuspense: true, // Enable Suspense for proper React integration
         bindI18n: 'languageChanged',
         bindI18nStore: 'added removed',
         transEmptyNodeValue: '',
