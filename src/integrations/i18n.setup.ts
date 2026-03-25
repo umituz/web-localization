@@ -66,25 +66,13 @@ export function setupI18n(options: SetupI18nOptions): typeof i18n {
   // Optimize resources for memory efficiency
   const optimizedResources = optimizeResources(resources);
 
-  // Set default language IMMEDIATELY to prevent undefined errors
-  i18n.language = defaultLng;
-  i18n.languages = [defaultLng, fallbackLng];
-
-  // Add resources immediately for instant access
-  for (const [lang, resource] of Object.entries(optimizedResources)) {
-    i18n.addResourceBundle(lang, 'translation', resource.translation, true, true);
-  }
-
-  // Mark as initialized immediately for synchronous access
-  isInitialized = true;
-
   // Create initialization promise for async setup
   initializationPromise = i18n
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
-      // Resources already added, so don't pass them again
-      resources: undefined,
+      // Use lazy loading if enabled (reduces initial bundle size)
+      resources: lazyLoad ? undefined : optimizedResources,
 
       lng: defaultLng,
       fallbackLng,
@@ -129,6 +117,8 @@ export function setupI18n(options: SetupI18nOptions): typeof i18n {
       cache: cache ? { enabled: true } : undefined,
     })
     .then(() => {
+      isInitialized = true;
+
       // Initialize SEO integration
       if (seo) {
         initSEO({
@@ -145,7 +135,6 @@ export function setupI18n(options: SetupI18nOptions): typeof i18n {
     .catch((error) => {
       console.error('Failed to initialize i18n:', error);
       initializationPromise = null;
-      isInitialized = false;
       throw error;
     });
 
