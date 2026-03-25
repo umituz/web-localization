@@ -66,6 +66,10 @@ export function setupI18n(options: SetupI18nOptions): typeof i18n {
   // Optimize resources for memory efficiency
   const optimizedResources = optimizeResources(resources);
 
+  // Set default language immediately to prevent undefined errors
+  i18n.language = defaultLng;
+  i18n.languages = [defaultLng, fallbackLng];
+
   // Create initialization promise
   initializationPromise = i18n
     .use(LanguageDetector)
