@@ -2,6 +2,13 @@
 
 This document is the **manual test playbook**. Each scenario lists exact steps, expected output, and what success/failure looks like.
 
+> **Automated coverage:** most of the scenarios below (key sync, auto-translate,
+> nested-object handling, caching, retries/aborts, CLI services, i18n setup)
+> are now automated in the vitest suite under `tests/` — run `npm test`.
+> This playbook remains useful for **end-to-end / release smoke testing**
+> (`npm pack` → install into a fresh project → run the real `web-loc` binary)
+> and for anything the unit suite cannot reach (real network, real bundlers).
+
 **Prerequisites:**
 - Node.js ≥ 18
 - The package built: `npm install`

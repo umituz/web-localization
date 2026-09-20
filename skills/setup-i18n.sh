@@ -36,73 +36,69 @@ mkdir -p src/i18n/locales
 echo "⚙️  Creating i18n configuration..."
 cat > src/i18n.ts << 'EOF'
 import { setupI18n } from '@umituz/web-localization/setup';
-import enUS from './i18n/locales/en-US.json';
-import trTR from './i18n/locales/tr-TR.json';
+import enUS from './i18n/locales/en-US';
+import trTR from './i18n/locales/tr-TR';
 
 setupI18n({
   resources: {
-    'en-US': { translation: enUS.translation },
-    'tr-TR': { translation: trTR.translation },
+    'en-US': { translation: enUS },
+    'tr-TR': { translation: trTR },
   },
   defaultLng: 'en-US',
   fallbackLng: 'en-US',
 });
 EOF
 
-# Create en-US JSON
-echo "📝 Creating en-US.json..."
-cat > src/i18n/locales/en-US.json << 'EOF'
-{
-  "translation": {
-    "app": {
-      "title": "Your App Name",
-      "description": "Your app description"
-    },
-    "nav": {
-      "home": "Home",
-      "about": "About",
-      "contact": "Contact"
-    },
-    "hero": {
-      "title": "Welcome to Our App",
-      "subtitle": "Build something amazing",
-      "cta": "Get Started"
-    },
-    "common": {
-      "loading": "Loading...",
-      "login": "Login",
-      "signup": "Sign Up"
-    }
-  }
-}
+# Create en-US locale (.ts default export — the format web-loc manages)
+echo "📝 Creating en-US.ts..."
+cat > src/i18n/locales/en-US.ts << 'EOF'
+export default {
+  app: {
+    title: "Your App Name",
+    description: "Your app description",
+  },
+  nav: {
+    home: "Home",
+    about: "About",
+    contact: "Contact",
+  },
+  hero: {
+    title: "Welcome to Our App",
+    subtitle: "Build something amazing",
+    cta: "Get Started",
+  },
+  common: {
+    loading: "Loading...",
+    login: "Login",
+    signup: "Sign Up",
+  },
+};
 EOF
 
-# Create tr-TR JSON
-echo "📝 Creating tr-TR.json..."
-cat > src/i18n/locales/tr-TR.json << 'EOF'
-{
-  "translation": {
-    "app": {
-      "title": "Uygulamanız",
-      "description": "Uygulama açıklamanız"
-    },
-    "nav": {
-      "home": "Ana Sayfa",
-      "about": "Hakkında",
-      "contact": "İletişim"
-    },
-    "hero": {
-      "title": "Uygulamamıza Hoş Geldiniz",
-      "subtitle": "Harika bir şeyler inşa edin",
-      "cta": "Başla"
-    },
-    "common": {
-      "loading": "Yükleniyor...",
-      "login": "Giriş",
-      "signup": "Kayıt Ol"
-    }
-  }
-}
+# Create tr-TR locale
+echo "📝 Creating tr-TR.ts..."
+cat > src/i18n/locales/tr-TR.ts << 'EOF'
+export default {
+  app: {
+    title: "Uygulamanız",
+    description: "Uygulama açıklamanız",
+  },
+  nav: {
+    home: "Ana Sayfa",
+    about: "Hakkında",
+    contact: "İletişim",
+  },
+  hero: {
+    title: "Uygulamamıza Hoş Geldiniz",
+    subtitle: "Harika bir şeyler inşa edin",
+    cta: "Başla",
+  },
+  common: {
+    loading: "Yükleniyor...",
+    login: "Giriş",
+    signup: "Kayıt Ol",
+  },
+};
 EOF
 
 # Add scripts to package.json
@@ -127,13 +123,16 @@ if [ -f "src/main.tsx" ]; then
     echo ""
     echo "  import './i18n';"
     echo ""
+    echo "And wrap <App /> in <Suspense fallback={null}> (from react) —"
+    echo "useTranslation() suspends until languages load."
+    echo ""
 fi
 
 echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "📋 Next steps:"
-echo "  1. Add 'import './i18n';' to src/main.tsx"
+echo "  1. Add 'import './i18n';' to src/main.tsx + <Suspense> around <App />"
 echo "  2. Use translations: const { t } = useTranslation();"
 echo "  3. Test: npm run dev"
 echo ""

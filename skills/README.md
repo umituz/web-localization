@@ -7,7 +7,8 @@ This directory contains integration guides and templates for the `@umituz/web-lo
 - **SKILL.md** - Complete integration guide for AI assistants
 - **templates/** - Starter templates for quick setup
   - `i18n.template.ts` - i18n configuration template
-  - `en-US.template.json` - Base language template
+  - `en-US.template.ts` - Base language template (default-export `.ts` locale)
+- **setup-i18n.sh** - One-shot setup script for React + Vite projects
 
 ## 🚀 Quick Start
 
@@ -25,8 +26,8 @@ cp skills/templates/i18n.template.ts src/i18n.ts
 # Create locales directory
 mkdir -p src/i18n/locales
 
-# Copy JSON template
-cp skills/templates/en-US.template.json src/i18n/locales/en-US.json
+# Copy the base locale template (default export — the web-loc format)
+cp skills/templates/en-US.template.ts src/i18n/locales/en-US.ts
 ```
 
 2. Install the package:
@@ -34,7 +35,7 @@ cp skills/templates/en-US.template.json src/i18n/locales/en-US.json
 npm install @umituz/web-localization
 ```
 
-3. Import i18n in `main.tsx`:
+3. Import i18n in `main.tsx` (and wrap App in `<Suspense>` — `useTranslation` suspends until languages load):
 ```typescript
 import './i18n';
 ```
@@ -54,8 +55,9 @@ Use this checklist to verify proper integration:
 - [ ] Package installed: `@umituz/web-localization`
 - [ ] File created: `src/i18n.ts`
 - [ ] Directory created: `src/i18n/locales/`
-- [ ] JSON files created with `translation` wrapper
-- [ ] Import added to `main.tsx`: `import './i18n'`
+- [ ] `.ts` locale files created, each with `export default { ... }` (no `translation` wrapper inside the locale file)
+- [ ] `src/i18n.ts` wraps them: `{ translation: enUS }`
+- [ ] Import added to `main.tsx`: `import './i18n'` + `<Suspense>` around App
 - [ ] Components use `useTranslation()` hook
 - [ ] Build succeeds: `npm run build`
 - [ ] No TypeScript errors: `npx tsc --noEmit`
@@ -72,6 +74,8 @@ Add to your `package.json`:
   }
 }
 ```
+
+The CLI manages `.ts` locale files only — keep locales in the default-export format so `sync`/`translate` can maintain them.
 
 ## 📖 Examples
 
@@ -91,21 +95,21 @@ Check out these projects using `@umituz/web-localization`:
 
 ### Translations showing as keys (e.g., "nav.home")
 
-**Problem:** JSON files missing `translation` wrapper
+**Problem:** Locale export shape wrong, or resources missing the `translation` wrapper in `src/i18n.ts`
 
 **Solution:**
-```json
-// ❌ WRONG
-{
-  "nav": { "home": "Home" }
-}
+```typescript
+// src/i18n/locales/en-US.ts — ❌ WRONG (no default export)
+module.exports = { nav: { home: 'Home' } };
 
 // ✅ CORRECT
-{
-  "translation": {
-    "nav": { "home": "Home" }
-  }
-}
+export default { nav: { home: 'Home' } };
+
+// src/i18n.ts — ❌ WRONG (missing wrapper)
+'en-US': enUS
+
+// ✅ CORRECT
+'en-US': { translation: enUS }
 ```
 
 ### Import errors
@@ -121,11 +125,11 @@ import { setupI18n } from '@umituz/web-localization';
 import { setupI18n } from '@umituz/web-localization/setup';
 ```
 
-### TypeScript errors
+### `web-loc` finds no locale files
 
-**Problem:** Using `.ts` files instead of `.json`
+**Problem:** Locales are `.json`, or `--locales-dir` points elsewhere
 
-**Solution:** Convert all locale files from `.ts` to `.json` format
+**Solution:** The CLI only manages `.ts` files named like `en-US.ts`. Convert JSON locales to `.ts` default exports.
 
 ## 📞 Support
 
@@ -136,6 +140,6 @@ For issues or questions:
 
 ---
 
-**Package Version:** 1.1.5
-**Last Updated:** 2026-03-23
+**Package Version:** 1.2.0
+**Last Updated:** 2026-09-20
 **Author:** umituz ⚡

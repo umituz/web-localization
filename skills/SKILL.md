@@ -26,6 +26,8 @@ Trigger this skill when:
 npm install @umituz/web-localization
 ```
 
+Peer dependencies (`i18next`, `react-i18next`, `i18next-browser-languagedetector`) are installed automatically by npm ≥ 7.
+
 ### Step 2: Create Locales Directory Structure
 
 ```bash
@@ -34,60 +36,57 @@ mkdir -p src/i18n/locales
 
 **CRITICAL**: Use `i18n` folder name, NOT `locales` at the root!
 
-### Step 3: Create JSON Locale Files
+### Step 3: Create TypeScript Locale Files
 
-Create JSON files (NOT TypeScript files) in `src/i18n/locales/`:
+Create `.ts` files with a **default export** in `src/i18n/locales/`. The CLI (`web-loc sync` / `web-loc translate`) reads and writes exactly this format:
 
-**File: `src/i18n/locales/en-US.json`**
-```json
-{
-  "translation": {
-    "nav": {
-      "home": "Home",
-      "about": "About",
-      "contact": "Contact"
-    },
-    "hero": {
-      "title": "Welcome to Our App",
-      "subtitle": "Build amazing things"
-    },
-    "common": {
-      "login": "Login",
-      "signup": "Sign Up",
-      "loading": "Loading..."
-    }
-  }
-}
+**File: `src/i18n/locales/en-US.ts`**
+```typescript
+export default {
+  nav: {
+    home: "Home",
+    about: "About",
+    contact: "Contact",
+  },
+  hero: {
+    title: "Welcome to Our App",
+    subtitle: "Build amazing things",
+  },
+  common: {
+    login: "Login",
+    signup: "Sign Up",
+    loading: "Loading...",
+  },
+};
 ```
 
-**File: `src/i18n/locales/tr-TR.json`**
-```json
-{
-  "translation": {
-    "nav": {
-      "home": "Ana Sayfa",
-      "about": "Hakkında",
-      "contact": "İletişim"
-    },
-    "hero": {
-      "title": "Uygulamamıza Hoş Geldiniz",
-      "subtitle": "Harika şeyler inşa edin"
-    },
-    "common": {
-      "login": "Giriş",
-      "signup": "Kayıt Ol",
-      "loading": "Yükleniyor..."
-    }
-  }
-}
+**File: `src/i18n/locales/tr-TR.ts`**
+```typescript
+export default {
+  nav: {
+    home: "Ana Sayfa",
+    about: "Hakkında",
+    contact: "İletişim",
+  },
+  hero: {
+    title: "Uygulamamıza Hoş Geldiniz",
+    subtitle: "Harika şeyler inşa edin",
+  },
+  common: {
+    login: "Giriş",
+    signup: "Kayıt Ol",
+    loading: "Yükleniyor...",
+  },
+};
 ```
 
 **IMPORTANT RULES:**
-- ✅ Use `.json` extension, NOT `.ts`
-- ✅ Wrap all content in `{"translation": { ... }}` structure
-- ✅ Use nested JSON objects for organization
-- ❌ DO NOT use TypeScript files
-- ❌ DO NOT export default from JSON files
+- ✅ Use `.ts` files with `export default { ... }`
+- ✅ Export the translation object directly — NO `translation` wrapper
+- ✅ Use nested objects for organization
+- ✅ Values must be plain strings (interpolation like `{{count}}` is fine)
+- ❌ DO NOT use JSON files — the `web-loc` CLI only manages `.ts` locale files
+- ❌ DO NOT use named exports
 
 ### Step 4: Create i18n Configuration File
 
@@ -96,14 +95,14 @@ Create JSON files (NOT TypeScript files) in `src/i18n/locales/`:
 ```typescript
 import { setupI18n } from '@umituz/web-localization/setup';
 
-import enUS from './i18n/locales/en-US.json';
-import trTR from './i18n/locales/tr-TR.json';
+import enUS from './i18n/locales/en-US';
+import trTR from './i18n/locales/tr-TR';
 // Add more languages as needed...
 
 setupI18n({
   resources: {
-    'en-US': { translation: enUS.translation },
-    'tr-TR': { translation: trTR.translation },
+    'en-US': { translation: enUS },
+    'tr-TR': { translation: trTR },
   },
   defaultLng: 'en-US',
   fallbackLng: 'en-US',
@@ -112,8 +111,8 @@ setupI18n({
 
 **CRITICAL POINTS:**
 - ✅ Import from `@umituz/web-localization/setup` (NOT main package)
-- ✅ Unwrap JSON files: `translation: enUS.translation`
-- ✅ DO NOT export i18n instance (setupI18n handles it)
+- ✅ Wrap the default export yourself: `translation: enUS` (no `.translation` unwrap)
+- ✅ DO NOT export the i18n instance (setupI18n handles it)
 - ✅ Place in `src/i18n.ts`, NOT `src/i18n/index.ts`
 
 ### Step 5: Import i18n in main.tsx
@@ -121,11 +120,11 @@ setupI18n({
 **File: `src/main.tsx`**
 
 ```typescript
-import React from 'react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
-import './i18n'  // ← ADD THIS LINE
+import './i18n'  // ← ADD THIS LINE (before App renders)
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -134,7 +133,9 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    <Suspense fallback={null}>
+      <App />
+    </Suspense>
   </React.StrictMode>,
 )
 ```
@@ -142,7 +143,8 @@ ReactDOM.createRoot(rootElement).render(
 **CRITICAL:**
 - ✅ Import i18n BEFORE rendering App
 - ✅ Use side-effect import: `import './i18n'`
-- ❌ DO NOT wrap App in Suspense
+- ✅ Wrap App in `<Suspense>` — `reactUseSuspense` is enabled by default, so components using `useTranslation()` suspend until languages load
+- ✅ Alternative: `await setupI18n(...).whenReady()` in an async bootstrap before rendering, then no Suspense is needed
 - ❌ DO NOT use I18nextProvider (setupI18n handles it)
 
 ### Step 6: Use Translations in Components
@@ -162,6 +164,8 @@ export const Navbar = () => {
   );
 };
 ```
+
+`useTranslation` comes from `react-i18next` (a peer dependency), not from this package.
 
 ### Step 7: Add Optional Language Switcher
 
@@ -201,7 +205,7 @@ The package includes CLI tools for auto-translation:
 
 ### Sync Keys
 
-Ensures all language files have the same keys as base language:
+Ensures all language files have the same keys as base language (adds missing keys as empty strings, removes stale ones, preserves existing translations):
 
 ```bash
 npm run i18n:sync
@@ -209,29 +213,26 @@ npm run i18n:sync
 
 ### Auto-Translate
 
-Uses Google Translate to fill missing translations:
+Uses Google Translate to fill keys that are still empty:
 
 ```bash
 npm run i18n:translate
 ```
 
+Preview changes without writing files: add `--dry-run`.
+
 ## Common Pitfalls & Solutions
 
-### ❌ Wrong: Using TypeScript Files
-```typescript
-// DON'T DO THIS
-export default {
-  nav: { home: "Home" }
-};
+### ❌ Wrong: Using JSON Files
+```json
+{ "nav": { "home": "Home" } }
 ```
 
-### ✅ Correct: Using JSON Files
-```json
-{
-  "translation": {
-    "nav": { "home": "Home" }
-  }
-}
+### ✅ Correct: TypeScript Default Export
+```typescript
+export default {
+  nav: { home: "Home" },
+};
 ```
 
 ### ❌ Wrong: Wrong Import Path
@@ -254,20 +255,20 @@ resources: {
 ### ✅ Correct: Proper Resources Structure
 ```typescript
 resources: {
-  'en-US': { translation: enUS.translation }
+  'en-US': { translation: enUS }
 }
 ```
 
-### ❌ Wrong: Suspense Wrapper
+### ❌ Wrong: No Suspense boundary
 ```tsx
-<Suspense fallback="Loading...">
-  <App />
-</Suspense>
+ReactDOM.createRoot(root).render(<App />)  // useTranslation suspends uncaught
 ```
 
-### ✅ Correct: Direct Import
+### ✅ Correct: Wrap App in Suspense (or await whenReady first)
 ```tsx
-import './i18n';  // Just import, no wrapper needed
+<Suspense fallback={null}>
+  <App />
+</Suspense>
 ```
 
 ## Troubleshooting
@@ -275,14 +276,14 @@ import './i18n';  // Just import, no wrapper needed
 ### Issue: Translations show as keys like "nav.home"
 
 **Causes:**
-1. Using `.ts` files instead of `.json`
-2. Missing `translation` wrapper in JSON
+1. Locale file has no `export default`
+2. Missing `translation` wrapper in `src/i18n.ts` resources
 3. i18n not imported in `main.tsx`
 4. Import path wrong (`@umituz/web-localization` instead of `/setup`)
 
 **Solution:**
-- Convert all locale files to JSON
-- Add `{"translation": { ... }}` wrapper
+- Ensure locale files `export default { ... }`
+- Wrap them in `src/i18n.ts`: `{ translation: enUS }`
 - Add `import './i18n'` in main.tsx
 - Use `@umituz/web-localization/setup` import
 
@@ -314,16 +315,23 @@ setupI18n({
 });
 ```
 
+### Issue: `web-loc` reports no locale files found
+
+**Cause:** Locales are JSON, or the directory doesn't match `--locales-dir`
+
+**Solution:** The CLI only manages `.ts` files named like `en-US.ts`. Convert JSON locales to `.ts` default exports and point `--locales-dir` at the folder holding them.
+
 ## Verification Checklist
 
 After integration, verify:
 
 - [ ] Package installed: `@umituz/web-localization`
-- [ ] Folder structure: `src/i18n/locales/*.json`
-- [ ] JSON format: All files have `{"translation": { ... }}` wrapper
-- [ ] i18n config: `src/i18n.ts` with correct imports
-- [ ] main.tsx: Has `import './i18n'` before App render
+- [ ] Folder structure: `src/i18n/locales/*.ts`
+- [ ] Locale format: every file has `export default { ... }` (no `translation` wrapper)
+- [ ] i18n config: `src/i18n.ts` with `{ translation: enUS }` resources
+- [ ] main.tsx: Has `import './i18n'` before App render, App wrapped in `<Suspense>`
 - [ ] Component usage: `const { t } = useTranslation()` works
+- [ ] CLI: `npm run i18n:sync` then `npm run i18n:translate` succeed
 - [ ] Build: `npm run build` succeeds
 - [ ] TypeScript: `npx tsc --noEmit` shows no errors
 - [ ] Runtime: Translations display correctly (not as keys)
@@ -335,25 +343,25 @@ my-project/
 ├── src/
 │   ├── i18n/
 │   │   └── locales/
-│   │       ├── en-US.json
-│   │       ├── tr-TR.json
-│   │       └── de-DE.json
-│   ├── i18n.ts                    ← Configuration file
-│   ├── main.tsx                   ← Imports i18n
+│   │       ├── en-US.ts             ← Base language (source of truth)
+│   │       ├── tr-TR.ts
+│   │       └── de-DE.ts
+│   ├── i18n.ts                      ← Configuration file
+│   ├── main.tsx                     ← Imports i18n, wraps App in Suspense
 │   ├── components/
-│   │   └── Navbar.tsx             ← Uses useTranslation()
+│   │   └── Navbar.tsx               ← Uses useTranslation()
 │   └── App.tsx
-├── package.json
+├── package.json                     ← Has i18n:sync / i18n:translate scripts
 └── vite.config.ts
 ```
 
 ## Best Practices
 
-1. **Always use JSON files** - Never use TypeScript for locales
-2. **Keep translation key flat** - Don't nest too deeply (max 3-4 levels)
+1. **Always use `.ts` locale files** — the `web-loc` CLI reads and writes only that format
+2. **Keep translation keys shallow** - Don't nest too deeply (max 3-4 levels)
 3. **Use descriptive keys** - `nav.home` is better than `n1`
 4. **Sync before translate** - Run `i18n:sync` before `i18n:translate`
-5. **Commit JSON files** - They should be in version control
+5. **Commit locale files** - They should be in version control
 6. **Test all languages** - Verify UI works for each supported language
 7. **Use interpolation** - Support dynamic values: `{{count}} items`
 
@@ -367,7 +375,7 @@ The package can auto-update meta tags:
 import { setupI18n } from '@umituz/web-localization/setup';
 
 setupI18n({
-  resources: { ... },
+  resources: { /* ... */ },
   seo: {
     titleKey: 'app.title',
     descriptionKey: 'app.description',
@@ -377,12 +385,12 @@ setupI18n({
 });
 ```
 
-Requires `@umituz/web-seo` package.
+Requires the optional `@umituz/web-seo` peer — if it is not installed, the integration is skipped with a console warning.
 
 ## Package Exports Reference
 
 ```typescript
-// Main package - CLI tools and services
+// Main package - translation services & typed errors
 import { googleTranslateService } from '@umituz/web-localization';
 
 // Setup subpath export - i18n configuration
@@ -391,12 +399,14 @@ import { setupI18n } from '@umituz/web-localization/setup';
 
 ## Additional Resources
 
+- README.md — full API and architecture reference
+- CONSUMING.md — platform integration guide (React Native, WebView, CI)
+- TEST_SCENARIOS.md — manual test playbook
 - i18next documentation: https://www.i18next.com/
 - react-i18next documentation: https://react.i18next.com/
-- Package location: `/Users/umituz/Desktop/github/umituz/apps/web/npm-packages/web-localization`
 
 ---
 
 **Created by:** umituz ⚡
-**Version:** 1.0.0
-**Last Updated:** 2026-03-23
+**Version:** 1.2.0
+**Last Updated:** 2026-09-20

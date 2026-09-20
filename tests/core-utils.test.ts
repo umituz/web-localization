@@ -250,7 +250,7 @@ describe("sleep", () => {
   it("resolves after the given delay and tolerates negative input", async () => {
     vi.useFakeTimers();
     let resolved = false;
-    const p = sleep(50).then(() => {
+    sleep(50).then(() => {
       resolved = true;
     });
     expect(resolved).toBe(false);
