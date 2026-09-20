@@ -1,0 +1,147 @@
+/**
+ * Integration tests for LocaleFileRepository against a real temp directory:
+ * read/write round-trip, caching, listLocales, typed errors, traversal guard,
+ * and the pure serialize/sync helpers.
+ */
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  LocaleFileRepository,
+  serializeLocaleObject,
+  syncObjectStructure,
+} from "../src/infrastructure/persistence/locale-file.repository";
+import {
+  LocaleFileSizeError,
+  LocaleParseError,
+  PathTraversalError,
+} from "../src/core/errors";
+
+let projectRoot: string;
+let repository: LocaleFileRepository;
+
+beforeEach(() => {
+  projectRoot = mkdtempSync(join(tmpdir(), "wl-repo-"));
+  repository = new LocaleFileRepository({ projectRoot });
+});
+
+afterAll(() => {
+  // Best-effort cleanup of any leftover temp dirs.
+  rmSync(projectRoot, { recursive: true, force: true });
+});
+
+describe("LocaleFileRepository.read", () => {
+  it("returns null for missing files", async () => {
+    expect(await repository.read("src/locales/missing.ts")).toBeNull();
+  });
+
+  it("parses a default-export object literal", async () => {
+    writeFileSync(
+      join(projectRoot, "en-US.ts"),
+      `export default {\n  nav: { home: "Home" },\n  list: ["a", "b"],\n  flag: true,\n  empty: null,\n};`
+    );
+    const data = await repository.read("en-US.ts");
+    expect(data).toEqual({
+      nav: { home: "Home" },
+      list: ["a", "b"],
+      flag: true,
+      empty: null,
+    });
+  });
+
+  it("parses named exports too", async () => {
+    writeFileSync(join(projectRoot, "de-DE.ts"), `export const de = { hello: "Hallo" };`);
+    expect(await repository.read("de-DE.ts")).toEqual({ hello: "Hallo" });
+  });
+
+  it("handles comments, escapes and unicode escapes", async () => {
+    writeFileSync(
+      join(projectRoot, "fr-FR.ts"),
+      `// header comment\nexport default {\n  // inline comment\n  quote: "line\\nbreak \\"quoted\\" \\u00e9",\n};`
+    );
+    const data = await repository.read("fr-FR.ts");
+    expect(data).toEqual({ quote: 'line\nbreak "quoted" é' });
+  });
+
+  it("throws typed LocaleParseError with position for malformed files", async () => {
+    writeFileSync(join(projectRoot, "bad.ts"), `export default { a: };`);
+    await expect(repository.read("bad.ts")).rejects.toThrow(LocaleParseError);
+  });
+
+  it("throws LocaleParseError when no object literal is exported", async () => {
+    writeFileSync(join(projectRoot, "no-export.ts"), `const x = 1;`);
+    await expect(repository.read("no-export.ts")).rejects.toThrow(LocaleParseError);
+  });
+
+  it("enforces the file size bound", async () => {
+    const strict = new LocaleFileRepository({ projectRoot, maxFileSizeBytes: 10 });
+    writeFileSync(join(projectRoot, "big.ts"), `export default { a: "0123456789ABCDEFGH" };`);
+    await expect(strict.read("big.ts")).rejects.toThrow(LocaleFileSizeError);
+  });
+
+  it("blocks path traversal outside the project root", async () => {
+    await expect(repository.read("../../etc/passwd")).rejects.toThrow(PathTraversalError);
+  });
+
+  it("caches parsed files and invalidates on write", async () => {
+    writeFileSync(join(projectRoot, "en-US.ts"), `export default { a: "1" };`);
+    expect(await repository.read("en-US.ts")).toEqual({ a: "1" });
+
+    // Same content on disk, changed externally — still cached:
+    writeFileSync(join(projectRoot, "en-US.ts"), `export default { a: "2" };`);
+    expect(await repository.read("en-US.ts")).toEqual({ a: "1" });
+
+    // A write through the repository invalidates the cache:
+    await repository.write("en-US.ts", { a: "3" }, "en-US");
+    expect(await repository.read("en-US.ts")).toEqual({ a: "3" });
+  });
+});
+
+describe("LocaleFileRepository.write + listLocales", () => {
+  it("writes a parseable TypeScript file and creates directories", async () => {
+    await repository.write("src/locales/tr-TR.ts", { nav: { home: "Ana Sayfa" } }, "tr-TR");
+    const data = await repository.read("src/locales/tr-TR.ts");
+    expect(data).toEqual({ nav: { home: "Ana Sayfa" } });
+  });
+
+  it("lists only locale-shaped .ts files, sorted", async () => {
+    mkdirSync(join(projectRoot, "src/locales"), { recursive: true });
+    for (const name of ["tr-TR.ts", "en-US.ts", "de-DE.ts", "readme.md", "en-US.json", "index.ts"]) {
+      writeFileSync(join(projectRoot, "src/locales", name), `export default {};`);
+    }
+    expect(await repository.listLocales("src/locales")).toEqual(["de-DE", "en-US", "tr-TR"]);
+  });
+
+  it("returns an empty list for a missing directory", async () => {
+    expect(await repository.listLocales("does/not/exist")).toEqual([]);
+  });
+});
+
+describe("serializeLocaleObject", () => {
+  it("emits a generated-file header and default export", () => {
+    const content = serializeLocaleObject({ a: "b" }, "tr-TR");
+    expect(content).toContain("Localization: tr-TR");
+    expect(content).toContain("Generated by @umituz/web-localization");
+    expect(content).toContain(`export default`);
+  });
+});
+
+describe("syncObjectStructure", () => {
+  it("adds missing keys as empty strings and removes stale keys", () => {
+    const source = { a: "A", nested: { x: "X", y: "Y" } };
+    const target = { a: "Á", nested: { x: "X" }, stale: "delete me" };
+    const synced = syncObjectStructure(source, target);
+    expect(synced).toEqual({ a: "Á", nested: { x: "X", y: "" } });
+  });
+
+  it("keeps non-string source values when the target is missing them", () => {
+    const synced = syncObjectStructure({ n: 5, ok: true }, {});
+    expect(synced).toEqual({ n: 5, ok: true });
+  });
+
+  it("replaces a non-object target node with an object synced from source", () => {
+    const synced = syncObjectStructure({ nested: { x: "X" } }, { nested: "was a string" });
+    expect(synced).toEqual({ nested: { x: "" } });
+  });
+});

@@ -9,8 +9,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { CACHE } from "../../core/constants";
 import { LRUCache } from "../../core/utils/lru-cache";
+import { LocaleParseError } from "../../core/errors";
 import { assertPathWithinProjectRoot } from "../../application/validations/path-traversal-guard";
 import { assertFileSizeWithinBound } from "../../application/validations/file-size-bound";
+import { isLocaleFilename } from "../../application/validations/locale-filename-shape";
 
 /**
  * Cache entry: a parsed object snapshot.
@@ -41,6 +43,14 @@ export class LocaleFileRepository {
     this.cacheTtlMs = options.cacheTtlMs ?? 5 * 60 * 1000;
   }
 
+  /**
+   * The resolved root all paths are validated against. Services use this to
+   * resolve relative inputs instead of assuming `process.cwd()`.
+   */
+  get root(): string {
+    return this.projectRoot;
+  }
+
   async read(filePath: string): Promise<Record<string, unknown> | null> {
     const absolutePath = assertPathWithinProjectRoot({
       requestedPath: filePath,
@@ -64,7 +74,15 @@ export class LocaleFileRepository {
     });
 
     const content = await fs.promises.readFile(absolutePath, "utf-8");
-    const object = parseLocaleObject(content);
+    let object: Record<string, unknown>;
+    try {
+      object = parseLocaleObject(content);
+    } catch (error) {
+      if (error instanceof ParseFailure) {
+        throw new LocaleParseError(filePath, error.position, error.reason);
+      }
+      throw error;
+    }
 
     this.objectCache.set(absolutePath, {
       value: { object, rawContent: content },
@@ -101,7 +119,7 @@ export class LocaleFileRepository {
 
     const entries = await fs.promises.readdir(absoluteDir);
     return entries
-      .filter((f) => /^[a-z]{2}(-[A-Z]{2})?\.ts$/.test(f))
+      .filter((f) => isLocaleFilename(f))
       .map((f) => path.basename(f, ".ts"))
       .sort();
   }
@@ -115,6 +133,21 @@ export class LocaleFileRepository {
 // Pure Functions: Locale Object Parser
 // ============================================================================
 
+/**
+ * Internal parser failure carrying the position; `read()` converts it into
+ * the public `LocaleParseError` (which needs the file path the parser
+ * does not know about).
+ */
+class ParseFailure extends Error {
+  constructor(
+    readonly position: number,
+    readonly reason: string
+  ) {
+    super(`Locale parse error at position ${position}: ${reason}`);
+    this.name = "ParseFailure";
+  }
+}
+
 function extractObjectLiteral(source: string): string {
   const defaultMatch = /export\s+default\s+(\{[\s\S]*\})\s*;?\s*$/.exec(source);
   if (defaultMatch && defaultMatch[1]) {
@@ -126,18 +159,13 @@ function extractObjectLiteral(source: string): string {
     return namedMatch[1];
   }
 
-  throw new Error("No exported object literal found in source");
+  throw new ParseFailure(0, "no exported object literal found in source");
 }
 
 function parseLocaleObject(source: string): Record<string, unknown> {
   const objectLiteral = extractObjectLiteral(source);
   const parser = new ObjectLiteralParser(objectLiteral);
-  parser.skipWhitespacePublic();
-  const result = parser.parseObject();
-  parser.skipWhitespacePublic();
-  if (!parser.isAtEndPublic()) {
-    throw new Error("Unexpected content after object literal");
-  }
+  const result = parser.parse();
   return result;
 }
 
@@ -146,7 +174,21 @@ class ObjectLiteralParser {
 
   constructor(private readonly source: string) {}
 
-  parseObject(): Record<string, unknown> {
+  /**
+   * Parse the whole source as a single object literal (surrounding whitespace
+   * and comments allowed, trailing content rejected).
+   */
+  parse(): Record<string, unknown> {
+    this.skipWhitespace();
+    const result = this.parseObject();
+    this.skipWhitespace();
+    if (!this.isAtEnd()) {
+      throw this.error("unexpected content after object literal");
+    }
+    return result;
+  }
+
+  private parseObject(): Record<string, unknown> {
     this.expect("{");
     const result: Record<string, unknown> = {};
 
@@ -329,10 +371,6 @@ class ObjectLiteralParser {
     }
   }
 
-  skipWhitespacePublic(): void {
-    this.skipWhitespace();
-  }
-
   private peek(): string {
     return this.source[this.pos] ?? "";
   }
@@ -352,12 +390,8 @@ class ObjectLiteralParser {
     return this.pos >= this.source.length;
   }
 
-  isAtEndPublic(): boolean {
-    return this.isAtEnd();
-  }
-
-  private error(message: string): Error {
-    return new Error(`Locale parse error at position ${this.pos}: ${message}`);
+  private error(message: string): ParseFailure {
+    return new ParseFailure(this.pos, message);
   }
 }
 

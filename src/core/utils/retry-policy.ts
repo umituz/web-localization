@@ -64,15 +64,19 @@ export class RetryPolicy {
 
   private sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(resolve, ms);
-      signal?.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          reject(new TranslationAbortedError());
-        },
-        { once: true }
-      );
+      const onAbort = (): void => {
+        clearTimeout(timer);
+        reject(new TranslationAbortedError());
+      };
+
+      const timer = setTimeout(() => {
+        // Remove the listener on settle — long-lived signals otherwise
+        // accumulate one listener per retry attempt (MaxListeners warning).
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 }

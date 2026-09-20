@@ -4,6 +4,7 @@
  */
 import * as path from "path";
 import { Semaphore } from "../../core/utils/semaphore";
+import { LocaleFileNotFoundError } from "../../core/errors";
 import { RATE_LIMIT } from "../../core/constants";
 import { LocaleFileRepository, syncObjectStructure } from "../persistence/locale-file.repository";
 import type { ProgressReporter } from "./progress-reporter";
@@ -38,12 +39,15 @@ export class LocaleSyncService {
   ) {}
 
   async run(options: SyncCommandOptions): Promise<SyncResult> {
-    const localesDir = path.resolve(process.cwd(), options.localesDir);
+    // Resolve against the repository's root, not process.cwd() — the
+    // repository enforces its own project root, so a cwd-relative path would
+    // be rejected as path traversal when they differ.
+    const localesDir = path.resolve(this.repository.root, options.localesDir);
     const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
 
     const baseData = await this.repository.read(baseLangPath);
     if (baseData === null) {
-      throw new Error(`Base language file not found: ${baseLangPath}`);
+      throw new LocaleFileNotFoundError(baseLangPath);
     }
 
     const locales = await this.repository.listLocales(localesDir);

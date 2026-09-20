@@ -1,6 +1,6 @@
 export { Semaphore } from "./semaphore";
 export { sleep } from "./sleep";
-export { LRUCache, wrapWithTTL } from "./lru-cache";
+export { LRUCache } from "./lru-cache";
 export type { TTLEntry } from "./lru-cache";
 export { RetryPolicy } from "./retry-policy";
 export type { RetryPolicyOptions } from "./retry-policy";

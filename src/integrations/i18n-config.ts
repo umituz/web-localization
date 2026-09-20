@@ -42,6 +42,15 @@ export interface BuiltI18nConfig {
   readonly onBeforeInit?: (instance: typeof i18n) => void;
 }
 
+/**
+ * A stable string fingerprint of the input. Used to detect conflicting
+ * re-initialization with different resources.
+ */
+export function computeConfigSignature(input: I18nConfigBuilderInput): string {
+  const langs = Object.keys(input.resources).sort().join(",");
+  return `${input.defaultLng ?? "en-US"}|${langs}`;
+}
+
 export class I18nConfigBuilder {
   private readonly input: I18nConfigBuilderInput;
 
@@ -54,8 +63,7 @@ export class I18nConfigBuilder {
    * re-initialization with different resources.
    */
   signature(): string {
-    const langs = Object.keys(this.input.resources).sort().join(",");
-    return `${this.input.defaultLng ?? "en-US"}|${langs}`;
+    return computeConfigSignature(this.input);
   }
 
   build(): BuiltI18nConfig {

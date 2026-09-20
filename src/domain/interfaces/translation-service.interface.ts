@@ -14,8 +14,17 @@ import type { ProgressEmitter } from "../../core/utils";
 export interface TranslationServiceConfig {
   readonly minDelayMs?: number;
   readonly timeoutMs?: number;
+  /**
+   * @deprecated Not used by `GoogleTranslateStrategy` — it calls Google's
+   * free public endpoint, which needs no key. Do not pass real API keys here;
+   * they are silently ignored. Reserved for future keyed providers.
+   */
   readonly apiKey?: string;
   readonly maxRetries?: number;
+  /**
+   * @deprecated Not used — the strategy always caches translations (bounded
+   * LRU). Call `clearCache()` when you need a fresh pass.
+   */
   readonly cacheEnabled?: boolean;
 }
 

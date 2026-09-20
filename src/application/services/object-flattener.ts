@@ -21,6 +21,9 @@ interface LeafToTranslate {
 
 /**
  * Walk source/target trees, collect leaf strings needing translation, apply results.
+ *
+ * Note: `collectLeaves` builds the intermediate structure on the target tree
+ * (creating missing nested objects) so results can be applied in-place.
  */
 export class ObjectTreeWalker {
   /**
@@ -35,6 +38,7 @@ export class ObjectTreeWalker {
     force: boolean
   ): LeafToTranslate[] {
     const leaves: LeafToTranslate[] = [];
+    void targetLanguage; // reserved for future locale-aware eligibility rules
 
     const walk = (src: Record<string, unknown>, tgt: Record<string, unknown>, prefix: string) => {
       for (const key of Object.keys(src)) {
@@ -56,8 +60,6 @@ export class ObjectTreeWalker {
         if (!force && !needsTranslation(tgtValue)) continue;
 
         leaves.push({ key, path: currentPath, text: srcValue });
-        // Reference targetLanguage to mark intent even if unused
-        void targetLanguage;
       }
     };
 
@@ -66,7 +68,8 @@ export class ObjectTreeWalker {
   }
 
   /**
-   * Apply a list of (text -> translation) mappings back to the target tree.
+   * Apply a list of (text -> translation) mappings back to the target tree,
+   * addressed by each leaf's path (nested keys land in their parent object).
    * @returns Updated stats with successes/failures recorded.
    */
   applyTranslations(
@@ -81,7 +84,8 @@ export class ObjectTreeWalker {
     for (const leaf of leaves) {
       const translated = translations.get(leaf.text);
       if (translated && translated !== leaf.text) {
-        target[leaf.key] = translated;
+        const parent = resolveParentNode(target, leaf.path);
+        parent[leaf.key] = translated;
         const item: TranslationItem = { key: leaf.path, from: leaf.text, to: translated };
         updated = updated.withSuccess(item);
         if (onProgress) onProgress(leaf.path, leaf.text, translated);
@@ -92,6 +96,30 @@ export class ObjectTreeWalker {
 
     return updated;
   }
+}
+
+/**
+ * Navigate (creating as needed) to the object that owns the final segment of
+ * a dot-separated leaf path.
+ */
+function resolveParentNode(
+  root: Record<string, unknown>,
+  leafPath: string
+): Record<string, unknown> {
+  const segments = leafPath.split(".");
+  segments.pop(); // drop the leaf key itself
+  let node: Record<string, unknown> = root;
+  for (const segment of segments) {
+    const next = node[segment];
+    if (!isPlainObject(next)) {
+      const created: Record<string, unknown> = {};
+      node[segment] = created;
+      node = created;
+    } else {
+      node = next;
+    }
+  }
+  return node;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

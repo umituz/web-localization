@@ -337,10 +337,10 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
   }
 }
 
-// Suppress unused warning when consumers don't need DEFAULT_SOURCE_LANG directly
-void DEFAULT_SOURCE_LANG;
-
 /**
  * Default singleton instance for convenience.
+ * @description Shares one cache and rate limiter across the app. Import
+ * `GoogleTranslateStrategy` and instantiate it yourself when you need
+ * isolated state (e.g. parallel jobs with different pacing).
  */
 export const googleTranslateService = new GoogleTranslateStrategy();

@@ -21,7 +21,7 @@ npm install @umituz/web-localization
 ```
 
 ```ts
-import { setupI18n, useTranslation } from "@umituz/web-localization";
+import { setupI18n } from "@umituz/web-localization/setup";
 
 const handle = setupI18n({
   resources: {
@@ -33,7 +33,8 @@ const handle = setupI18n({
 });
 
 await handle.whenReady();
-// Use react-i18next as usual
+// Components use useTranslation from the react-i18next peer:
+//   import { useTranslation } from "react-i18next";
 ```
 
 ---

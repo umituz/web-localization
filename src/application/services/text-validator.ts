@@ -3,14 +3,15 @@
  * @description Public-facing API for translation text checks.
  * The actual logic lives in `validations/translation-text-eligibility.ts`.
  */
-import { evaluateTextEligibility } from "../validations/translation-text-eligibility";
-
-const DEFAULT_SKIPLIST: readonly string[] = ["@umituz"];
+import {
+  evaluateTextEligibility,
+  DEFAULT_SKIP_LIST,
+} from "../validations/translation-text-eligibility";
 
 export class TextValidator {
   private readonly skipList: ReadonlySet<string>;
 
-  constructor(skipList: readonly string[] = DEFAULT_SKIPLIST) {
+  constructor(skipList: readonly string[] = DEFAULT_SKIP_LIST) {
     this.skipList = new Set(skipList);
   }
 

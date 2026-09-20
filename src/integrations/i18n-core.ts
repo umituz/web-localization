@@ -5,13 +5,13 @@
  *
  * Idempotency: initialization is one-shot per core instance. Calling
  * `initialize()` after success returns the existing instance.
- * Calling with different resources throws AlreadyInitializedError.
+ * Detecting a conflicting re-initialization (different resources) is
+ * `setupI18n`'s responsibility — it compares fingerprints before reuse.
  */
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import type { I18nConfigBuilder, BuiltI18nConfig } from "./i18n-config";
-import { AlreadyInitializedError } from "../core/errors";
 
 export type I18nInstance = typeof i18n;
 export type I18nInitCallback = (instance: I18nInstance) => void;
@@ -28,26 +28,28 @@ export interface I18nCoreOptions {
 export class I18nCore {
   private initialized = false;
   private initializationPromise: Promise<I18nInstance> | null = null;
-  private readonly signature: string;
 
   constructor(
     private readonly instance: I18nInstance = i18n,
     private readonly options: I18nCoreOptions
-  ) {
-    this.signature = this.options.builder.signature();
+  ) {}
+
+  /**
+   * Fingerprint of the configuration this core was built from. Callers use it
+   * to detect conflicting re-initialization (same core, different resources).
+   */
+  get signature(): string {
+    return this.options.builder.signature();
   }
 
   /**
-   * Initialize i18next. Throws on conflicting re-initialization.
+   * Initialize i18next. Idempotent per core instance — re-calling after
+   * success returns the existing instance. Conflict detection (initializing
+   * the shared core with different resources) lives in `setupI18n`, which is
+   * the only place where a *different* configuration can be observed.
    */
   initialize(): I18nInstance {
     if (this.initialized && this.instance.isInitialized) {
-      // Ensure resources haven't changed — if they have, that's a bug in caller
-      if (this.signature !== this.options.builder.signature()) {
-        throw new AlreadyInitializedError(
-          "i18n was initialized with different resources. Call reset() first."
-        );
-      }
       return this.instance;
     }
 

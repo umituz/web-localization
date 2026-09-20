@@ -2,6 +2,7 @@ export { assertPathWithinProjectRoot } from "./path-traversal-guard";
 export type { PathTraversalCheckInput } from "./path-traversal-guard";
 export {
   evaluateTextEligibility,
+  DEFAULT_SKIP_LIST,
 } from "./translation-text-eligibility";
 export type {
   TextEligibility,

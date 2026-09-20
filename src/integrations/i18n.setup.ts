@@ -7,7 +7,6 @@
  * call `handle.reset()` first if you need to re-initialize.
  */
 import i18n from "i18next";
-import { initSEO } from "@umituz/web-seo";
 import {
   I18nCore,
   type I18nInstance,
@@ -15,13 +14,11 @@ import {
 } from "./i18n-core";
 import {
   I18nConfigBuilder,
+  computeConfigSignature,
   type DetectionOptions,
   type SeoIntegrationOptions,
 } from "./i18n-config";
 import { AlreadyInitializedError } from "../core/errors";
-
-// Suppress unused warning - exposed via core/errors barrel
-void AlreadyInitializedError;
 
 export type { DetectionOptions, SeoIntegrationOptions };
 
@@ -56,12 +53,30 @@ let globalCore: I18nCore | null = null;
 /**
  * Initialize i18next with the given configuration.
  * @description Idempotent only when called with the same resources. Re-calling
- * with different resources throws `AlreadyInitializedError`.
+ * with different resources (different default language or language set)
+ * throws `AlreadyInitializedError` — call `resetI18n()` first to re-init.
  */
 export function setupI18n(options: SetupI18nOptions): I18nHandle {
+  const incomingSignature = computeConfigSignature({
+    resources: options.resources,
+    defaultLng: options.defaultLng,
+    fallbackLng: options.fallbackLng,
+    detection: options.detection,
+    seo: options.seo,
+    lazyLoad: options.lazyLoad,
+    saveMissing: options.saveMissing,
+    reactUseSuspense: options.reactUseSuspense,
+  });
+
   if (globalCore) {
-    // Already initializing or initialized — re-use existing core
-    // I18nCore.initialize() will throw if resources differ.
+    // Already initializing or initialized. Reuse the existing core only when
+    // the configuration fingerprint matches; a mismatch means the caller is
+    // trying to re-initialize with different resources.
+    if (globalCore.signature !== incomingSignature) {
+      throw new AlreadyInitializedError(
+        `i18n (initialized with "${globalCore.signature}", called with "${incomingSignature}"). Call resetI18n() first to re-initialize.`
+      );
+    }
     globalCore.initialize();
     return buildHandle(globalCore);
   }
@@ -80,21 +95,23 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   const core = new I18nCore(i18n, {
     builder,
     onInit: options.onInit,
+    // Loaded lazily so consumers that do not use the SEO integration never
+    // pull @umituz/web-seo (an optional peer) into their bundle.
     seoIntegrator: (instance, seo) => {
-      initSEO({ i18n: instance, ...seo });
+      void import("@umituz/web-seo")
+        .then(({ initSEO }) => initSEO({ i18n: instance, ...seo }))
+        .catch((error: unknown) => {
+          console.warn(
+            "[web-localization] SEO integration skipped — install @umituz/web-seo to enable it.",
+            error,
+          );
+        });
     },
   });
 
-  try {
-    core.initialize();
-  } catch (err) {
-    // If init fails outright, don't keep a half-initialized core
-    if (!(err instanceof AlreadyInitializedError)) {
-      globalCore = null;
-    }
-    throw err;
-  }
-
+  core.initialize();
+  // Only cache the core once initialization has been kicked off successfully;
+  // a synchronous failure above leaves no half-initialized global state.
   globalCore = core;
   return buildHandle(core);
 }

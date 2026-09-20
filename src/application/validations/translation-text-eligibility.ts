@@ -6,7 +6,11 @@
  * @description Single-responsibility guard for the translation pipeline.
  * Configurable skip list allows per-project customization.
  */
-const DEFAULT_SKIP_LIST: readonly string[] = ["@umituz"];
+/**
+ * Default skip list: substrings that brand a text as a product name.
+ * Kept configurable — pass your own `skipList` to override entirely.
+ */
+export const DEFAULT_SKIP_LIST: readonly string[] = ["@umituz"];
 const PURE_NUMBER_PATTERN = /^\d+$/;
 
 export interface TextEligibility {

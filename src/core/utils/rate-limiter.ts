@@ -77,9 +77,17 @@ export class RateLimiter {
     this.responseWindow.clear();
   }
 
+  /**
+   * Drop all pending state. Queued waiters are resolved (never left hanging —
+   * a settled-but-unthrottled waiter is safe; a permanently pending promise
+   * is a deadlock). Use before discarding the limiter.
+   */
   clear(): void {
-    this.queue.length = 0;
+    const pending = this.queue.splice(0, this.queue.length);
     this.processing = false;
+    for (const request of pending) {
+      request.resolve();
+    }
   }
 
   get queueLength(): number {
