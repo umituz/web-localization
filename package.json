@@ -79,6 +79,15 @@
     "LICENSE"
   ],
   "peerDependenciesMeta": {
+    "i18next": {
+      "optional": true
+    },
+    "react-i18next": {
+      "optional": true
+    },
+    "i18next-browser-languagedetector": {
+      "optional": true
+    },
     "@umituz/web-seo": {
       "optional": true
     }
