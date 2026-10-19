@@ -75,7 +75,6 @@
     "src",
     "dist",
     "README.md",
-    "CONSUMING.md",
     "LICENSE"
   ],
   "peerDependenciesMeta": {
