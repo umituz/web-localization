@@ -12,7 +12,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./setup": "./src/integrations/i18n.setup.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./react": "./src/react/index.ts"
   },
   "engines": {
     "node": ">=18"
