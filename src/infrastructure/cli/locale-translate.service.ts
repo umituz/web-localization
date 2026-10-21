@@ -1,7 +1,3 @@
-/**
- * Locale Translate Service
- * @description Translates locale files using a translation strategy.
- */
 import * as path from "path";
 import { Semaphore } from "../../core/utils/semaphore";
 import { LocaleFileNotFoundError } from "../../core/errors";
@@ -43,9 +39,7 @@ export class LocaleTranslateService {
   ) {}
 
   async run(options: TranslateCommandOptions): Promise<TranslateResult> {
-    // Resolve against the repository's root, not process.cwd() — the
-    // repository enforces its own project root, so a cwd-relative path would
-    // be rejected as path traversal when they differ.
+
     const localesDir = path.resolve(this.repository.root, options.localesDir);
     const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
 
@@ -74,7 +68,7 @@ export class LocaleTranslateService {
     const semaphore = new Semaphore(options.concurrency ?? RATE_LIMIT.DEFAULT_CONCURRENCY);
     const emitter = new ProgressEmitter();
     emitter.on("keyTranslated", () => {
-      // Suppressed by default — consumers can attach their own listener
+
     });
 
     let succeeded = 0;

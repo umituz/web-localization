@@ -1,14 +1,3 @@
-/**
- * Rate Limiter with Priority Queue and Dynamic Delay
- * @description Controls request throughput with intelligent timing.
- *
- * Responsibilities:
- * 1. Enforce minimum delay between requests
- * 2. Prioritize higher-priority callers
- * 3. Adapt delay based on observed response times
- *
- * All calculations delegated to `application/calculations/`.
- */
 import { RATE_LIMIT } from "../constants";
 import { sleep } from "./sleep";
 import {
@@ -77,11 +66,6 @@ export class RateLimiter {
     this.responseWindow.clear();
   }
 
-  /**
-   * Drop all pending state. Queued waiters are resolved (never left hanging —
-   * a settled-but-unthrottled waiter is safe; a permanently pending promise
-   * is a deadlock). Use before discarding the limiter.
-   */
   clear(): void {
     const pending = this.queue.splice(0, this.queue.length);
     this.processing = false;
@@ -97,10 +81,6 @@ export class RateLimiter {
   get currentDelay(): number {
     return this.dynamicDelay;
   }
-
-  // --------------------------------------------------------------------------
-  // Internal
-  // --------------------------------------------------------------------------
 
   private enqueue(request: QueuedRequest): void {
     let insertAt = this.queue.length;

@@ -1,16 +1,3 @@
-/**
- * Exponential Backoff Delay Calculator
- * @description Computes delay (ms) for retry attempt N.
- *
- * Formula: `initial * multiplier^attempt`, optionally capped.
- * Pure function, deterministic.
- *
- * Example: initial=2000, multiplier=2
- *   attempt 0 → 2000
- *   attempt 1 → 4000
- *   attempt 2 → 8000
- *   with cap=10000 → [2000, 4000, 8000, 10000, 10000, ...]
- */
 export interface ExponentialBackoffInput {
   readonly attempt: number;
   readonly initialDelayMs: number;

@@ -1,11 +1,5 @@
-/**
- * Tests for the ./setup integration: setupI18n lifecycle, idempotency,
- * conflicting re-initialization (regression), and handle operations.
- */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The SEO integration is a peer integration concern — mock it so these tests
-// exercise only this package's lifecycle logic.
 vi.mock("@umituz/web-seo", () => ({ initSEO: vi.fn() }));
 
 import { resetI18n, setupI18n } from "../src/integrations/i18n.setup";
@@ -25,7 +19,7 @@ function options(overrides: Record<string, unknown> = {}) {
     >,
     defaultLng: "en",
     fallbackLng: "en",
-    detection: { order: [], caches: [] }, // deterministic in Node
+    detection: { order: [], caches: [] },
     ...overrides,
   };
 }
@@ -79,8 +73,8 @@ describe("setupI18n", () => {
         seo: { titleKey: "app.title", descriptionKey: "app.description" },
       })
     );
-    await Promise.resolve(); // flush microtasks so init callbacks run
-    // initSEO runs after i18next init resolves; give it a tick.
+    await Promise.resolve();
+
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(initSEO).toHaveBeenCalled();
   });
@@ -117,10 +111,10 @@ describe("I18nHandle", () => {
   });
 
   it("guards operations before initialization completes", () => {
-    // Fresh module state via reset; operate synchronously right after setup.
+
     resetI18n();
     const handle = setupI18n(options());
-    // Force the not-yet-initialized path by resetting the core under the handle:
+
     handle.reset();
     expect(() => handle.addLanguage("de", {})).toThrow(/not initialized/i);
   });

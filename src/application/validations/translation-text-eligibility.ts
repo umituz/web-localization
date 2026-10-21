@@ -1,15 +1,3 @@
-/**
- * Translation Text Eligibility
- * @description Determines whether a text is eligible for translation,
- * should be skipped (brand names, etc.), or already has a translation.
- *
- * @description Single-responsibility guard for the translation pipeline.
- * Configurable skip list allows per-project customization.
- */
-/**
- * Default skip list: substrings that brand a text as a product name.
- * Kept configurable — pass your own `skipList` to override entirely.
- */
 export const DEFAULT_SKIP_LIST: readonly string[] = ["@umituz"];
 const PURE_NUMBER_PATTERN = /^\d+$/;
 
@@ -25,9 +13,6 @@ export interface TranslationTextEligibilityInput {
   readonly skipList?: readonly string[];
 }
 
-/**
- * Evaluate a single text in three independent dimensions.
- */
 export function evaluateTextEligibility(input: TranslationTextEligibilityInput): TextEligibility {
   const skipList = input.skipList ?? DEFAULT_SKIP_LIST;
   return {

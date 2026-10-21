@@ -1,8 +1,3 @@
-/**
- * Text Validator (thin facade over translation-text-eligibility)
- * @description Public-facing API for translation text checks.
- * The actual logic lives in `validations/translation-text-eligibility.ts`.
- */
 import {
   evaluateTextEligibility,
   DEFAULT_SKIP_LIST,

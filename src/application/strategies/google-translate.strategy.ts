@@ -1,17 +1,3 @@
-/**
- * Google Translate Strategy
- * @description Implements ITranslationStrategy using Google Translate's public API.
- *
- * Architecture: composes focused utilities via dependency injection:
- * - TranslationCache: caching of results
- * - VariableProtector: preserves {{placeholders}}
- * - GoogleTranslateHttpClient: HTTP transport
- * - RateLimiter: request pacing
- * - RetryPolicy: failure recovery
- * - Semaphore: bounded concurrency
- * - TextValidator: input filtering
- * - ObjectTreeWalker: nested object translation
- */
 import type {
   ITranslationStrategy,
   ObjectTranslationContext,
@@ -81,10 +67,6 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     this.semaphore = new Semaphore(this.maxConcurrent);
   }
 
-  // --------------------------------------------------------------------------
-  // ITranslationStrategy
-  // --------------------------------------------------------------------------
-
   async translate(
     request: TranslationRequest,
     signal?: AbortSignal
@@ -145,7 +127,6 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
 
     let stats = TranslationStats.initial(requests.length);
 
-    // Cache lookup pass
     const uncached: TranslationRequest[] = [];
     for (const req of requests) {
       throwIfAborted(signal);
@@ -213,10 +194,6 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     return stats;
   }
 
-  // --------------------------------------------------------------------------
-  // Object translation
-  // --------------------------------------------------------------------------
-
   async translateObject(
     context: ObjectTranslationContext,
     options: { signal?: AbortSignal; emitter?: ProgressEmitter } = {}
@@ -275,10 +252,6 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     return applied;
   }
 
-  // --------------------------------------------------------------------------
-  // Public helpers
-  // --------------------------------------------------------------------------
-
   getCacheStats(): { size: number; maxSize: number } {
     return this.cache.stats();
   }
@@ -291,10 +264,6 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     this.cache.clear();
     this.rateLimiter.clear();
   }
-
-  // --------------------------------------------------------------------------
-  // Internal
-  // --------------------------------------------------------------------------
 
   private async fetchOneWithLimits(
     req: TranslationRequest,
@@ -337,10 +306,4 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
   }
 }
 
-/**
- * Default singleton instance for convenience.
- * @description Shares one cache and rate limiter across the app. Import
- * `GoogleTranslateStrategy` and instantiate it yourself when you need
- * isolated state (e.g. parallel jobs with different pacing).
- */
 export const googleTranslateService = new GoogleTranslateStrategy();

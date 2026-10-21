@@ -1,8 +1,3 @@
-/**
- * Retry Policy with Exponential Backoff
- * @description Generic retry executor. Backoff math delegated to
- * `calculations/exponential-backoff.ts`. Cancellation via AbortSignal.
- */
 import { TranslationAbortedError } from "../errors";
 import { assertNotAborted } from "../../application/validations/abort-signal-state";
 import { computeExponentialBackoff } from "../../application/calculations/exponential-backoff";
@@ -18,10 +13,6 @@ export interface RetryPolicyOptions {
 export class RetryPolicy {
   constructor(private readonly options: RetryPolicyOptions) {}
 
-  /**
-   * Execute the given async operation, retrying on failure according to policy.
-   * @throws TranslationAbortedError if signal is aborted.
-   */
   async execute<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const { maxRetries, isRetryable } = this.options;
     let lastError: unknown;
@@ -70,8 +61,7 @@ export class RetryPolicy {
       };
 
       const timer = setTimeout(() => {
-        // Remove the listener on settle — long-lived signals otherwise
-        // accumulate one listener per retry attempt (MaxListeners warning).
+
         signal?.removeEventListener("abort", onAbort);
         resolve();
       }, ms);

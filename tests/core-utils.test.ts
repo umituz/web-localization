@@ -1,7 +1,3 @@
-/**
- * Tests for core utilities: LRUCache (incl. TTL), Semaphore, RateLimiter
- * (incl. the clear()-settles-waiters regression), RetryPolicy, sleep.
- */
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { LRUCache } from "../src/core/utils/lru-cache";
 import { Semaphore } from "../src/core/utils/semaphore";
@@ -19,7 +15,7 @@ describe("LRUCache", () => {
     const cache = new LRUCache<string, number>(2);
     cache.set("a", 1);
     cache.set("b", 2);
-    cache.get("a"); // refresh a → b is now oldest
+    cache.get("a");
     cache.set("c", 3);
     expect(cache.has("b")).toBe(false);
     expect(cache.get("a")).toBe(1);
@@ -48,7 +44,7 @@ describe("LRUCache", () => {
     vi.advanceTimersByTime(1001);
     expect(cache.has("k")).toBe(false);
     expect(cache.get("k")).toBeUndefined();
-    expect(cache.size).toBe(0); // expired entry removed
+    expect(cache.size).toBe(0);
   });
 
   it("TTL refreshes recency without resetting expiry", () => {
@@ -56,8 +52,8 @@ describe("LRUCache", () => {
     const cache = new LRUCache<string, string>(5, 1000);
     cache.set("k", "v");
     vi.advanceTimersByTime(600);
-    cache.get("k"); // recency refresh — expiry is per-entry, not sliding
-    vi.advanceTimersByTime(500); // 1100ms total since set
+    cache.get("k");
+    vi.advanceTimersByTime(500);
     expect(cache.get("k")).toBeUndefined();
   });
 });
@@ -90,7 +86,7 @@ describe("Semaphore", () => {
         throw new Error("boom");
       })
     ).rejects.toThrow("boom");
-    // Permit must be free again:
+
     await semaphore.run(async () => "ok");
     expect(semaphore.availablePermits).toBe(1);
   });
@@ -114,7 +110,7 @@ describe("RateLimiter", () => {
     });
 
     await vi.advanceTimersByTimeAsync(10);
-    expect(secondDone).toBe(false); // still waiting for the delay window
+    expect(secondDone).toBe(false);
     await vi.advanceTimersByTimeAsync(60);
     expect(secondDone).toBe(true);
     await first;
@@ -168,7 +164,7 @@ describe("RetryPolicy", () => {
       isRetryable: (err) => err instanceof TranslationHttpError && err.isRetryable,
     });
     await expect(policy.execute(fn)).rejects.toThrow(TranslationHttpError);
-    expect(attempts).toBe(3); // 1 initial + 2 retries
+    expect(attempts).toBe(3);
   });
 
   it("does not retry when isRetryable returns false", async () => {
@@ -208,8 +204,7 @@ describe("RetryPolicy", () => {
     });
 
     const promise = policy.execute(fn, controller.signal);
-    // Flush microtasks so attempt 1 settles and the backoff sleep (and its
-    // abort listener) is actually registered before we abort.
+
     await vi.advanceTimersByTimeAsync(1);
     controller.abort();
 
@@ -236,7 +231,7 @@ describe("RetryPolicy", () => {
         controller.signal
       )
     ).rejects.toThrow();
-    // 1 initial + 8 retries = 9 attempts, 8 sleeps — all listeners removed on settle.
+
     const leaked = warning.mock.calls.filter((c) =>
       String(c[0]).includes("MaxListenersExceededWarning")
     );
@@ -256,6 +251,6 @@ describe("sleep", () => {
     expect(resolved).toBe(false);
     await vi.advanceTimersByTimeAsync(50);
     expect(resolved).toBe(true);
-    await sleep(-1); // must not hang
+    await sleep(-1);
   });
 });

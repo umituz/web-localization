@@ -1,8 +1,3 @@
-/**
- * Result Type - Explicit success/failure without exceptions for expected errors
- * @description Functional error handling pattern. Use for predictable domain failures,
- * reserve exceptions for truly unexpected/programming errors.
- */
 export type Result<T, E = Error> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E };

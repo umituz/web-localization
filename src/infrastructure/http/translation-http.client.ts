@@ -1,14 +1,3 @@
-/**
- * Google Translate HTTP Client
- * @description Sends requests to Google Translate's public endpoint.
- * Pure I/O — no business logic, all calculations delegated.
- *
- * Composition:
- * - URL building → calculations/google-translate-url-builder
- * - Response parsing → calculations/translation-segment-merger
- * - Retryability → validations/http-status-retryability
- * - Abort handling → validations/abort-signal-state
- */
 import { GOOGLE_TRANSLATE } from "../../core/constants";
 import {
   TranslationHttpError,
@@ -41,9 +30,6 @@ export class GoogleTranslateHttpClient {
     }
   }
 
-  /**
-   * Send a translation request to Google Translate.
-   */
   async translate(
     text: string,
     sourceLang: string,
@@ -86,7 +72,7 @@ export class GoogleTranslateHttpClient {
       if (controller.signal.aborted && !isAborted(signal)) {
         throw new TranslationTimeoutError(this.options.timeoutMs);
       }
-      // Network-level failure (no HTTP status received)
+
       throw new TranslationHttpError(
         0,
         error instanceof Error ? error.message : "Network request failed",

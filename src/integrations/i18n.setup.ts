@@ -1,11 +1,3 @@
-/**
- * i18n Setup - Public API
- * @description Composes I18nCore, I18nConfigBuilder, and SEO integration.
- *
- * Lifecycle: call `setupI18n()` once at app startup. The returned `I18nHandle`
- * provides runtime operations. Re-calling with different resources throws —
- * call `handle.reset()` first if you need to re-initialize.
- */
 import i18n from "i18next";
 import {
   I18nCore,
@@ -50,12 +42,6 @@ export interface I18nHandle {
 
 let globalCore: I18nCore | null = null;
 
-/**
- * Initialize i18next with the given configuration.
- * @description Idempotent only when called with the same resources. Re-calling
- * with different resources (different default language or language set)
- * throws `AlreadyInitializedError` — call `resetI18n()` first to re-init.
- */
 export function setupI18n(options: SetupI18nOptions): I18nHandle {
   const incomingSignature = computeConfigSignature({
     resources: options.resources,
@@ -69,9 +55,7 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   });
 
   if (globalCore) {
-    // Already initializing or initialized. Reuse the existing core only when
-    // the configuration fingerprint matches; a mismatch means the caller is
-    // trying to re-initialize with different resources.
+
     if (globalCore.signature !== incomingSignature) {
       throw new AlreadyInitializedError(
         `i18n (initialized with "${globalCore.signature}", called with "${incomingSignature}"). Call resetI18n() first to re-initialize.`
@@ -95,8 +79,7 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   const core = new I18nCore(i18n, {
     builder,
     onInit: options.onInit,
-    // Loaded lazily so consumers that do not use the SEO integration never
-    // pull @umituz/web-seo (an optional peer) into their bundle.
+
     seoIntegrator: (instance, seo) => {
       void import("@umituz/web-seo")
         .then(({ initSEO }) => initSEO({ i18n: instance, ...seo }))
@@ -110,16 +93,11 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   });
 
   core.initialize();
-  // Only cache the core once initialization has been kicked off successfully;
-  // a synchronous failure above leaves no half-initialized global state.
+
   globalCore = core;
   return buildHandle(core);
 }
 
-/**
- * Reset the i18n core. Clears the global handle and i18next resources.
- * Use in tests or when fully reloading the app.
- */
 export function resetI18n(): void {
   globalCore?.reset();
   globalCore = null;

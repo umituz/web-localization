@@ -1,9 +1,3 @@
-/**
- * Core Constants - Centralized configuration
- * @description All magic numbers and configuration values live here.
- * Group constants by domain responsibility for clarity.
- */
-
 export const HTTP = {
   DEFAULT_TIMEOUT_MS: 10_000,
   DEFAULT_MAX_RETRIES: 3,
@@ -21,8 +15,8 @@ export const RATE_LIMIT = {
 
 export const CACHE = {
   TRANSLATION_MAX_SIZE: 1_000,
-  TRANSLATION_TTL_MS: 60 * 60 * 1_000, // 1 hour
-  FILE_MAX_SIZE: 10_000_000, // 10MB
+  TRANSLATION_TTL_MS: 60 * 60 * 1_000,
+  FILE_MAX_SIZE: 10_000_000,
 } as const;
 
 export const LOCALE = {

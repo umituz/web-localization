@@ -1,10 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * CLI Tool for @umituz/web-localization
- * @description Command-line entry point.
- */
-
 import { Command } from "commander";
 import { cliService } from "../infrastructure/cli/cli.service";
 import { readFileSync } from "node:fs";

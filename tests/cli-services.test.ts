@@ -1,8 +1,3 @@
-/**
- * Integration tests for the CLI service layer (sync + translate) against a
- * real temp directory, using a fake translation strategy and a silent
- * reporter — the same seam the `web-loc` binary uses.
- */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +17,6 @@ let projectRoot: string;
 let repository: LocaleFileRepository;
 const reporter = new NullProgressReporter();
 
-/** Echo strategy: "translates" by appending "!" and records calls. */
 function makeEchoStrategy() {
   const calls: Array<Record<string, unknown>> = [];
   const strategy: ITranslationStrategy = {
@@ -144,7 +138,7 @@ describe("LocaleTranslateService", () => {
 
     const result = await service.run({ localesDir: "src/locales", baseLang: "en-US" });
     expect(result.languagesSucceeded).toBe(1);
-    expect(result.totalKeysTranslated).toBe(1); // only cta was empty
+    expect(result.totalKeysTranslated).toBe(1);
 
     const written = readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8");
     expect(written).toContain("Go!");
@@ -158,7 +152,7 @@ describe("LocaleTranslateService", () => {
     const service = new LocaleTranslateService(repository, strategy, reporter);
 
     const result = await service.run({ localesDir: "src/locales", baseLang: "en-US", dryRun: true });
-    // nav.home is empty and cta is missing → both are translated in memory.
+
     expect(result.totalKeysTranslated).toBe(2);
     expect(readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8")).toBe(before);
   });

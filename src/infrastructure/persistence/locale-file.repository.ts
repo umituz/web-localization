@@ -1,10 +1,3 @@
-/**
- * Locale File Repository
- * @description FS abstraction for locale TypeScript files.
- *
- * Security: parses TypeScript exports via custom parser (no `new Function`).
- * Validations delegated to `application/validations/`.
- */
 import * as fs from "fs";
 import * as path from "path";
 import { CACHE } from "../../core/constants";
@@ -14,9 +7,6 @@ import { assertPathWithinProjectRoot } from "../../application/validations/path-
 import { assertFileSizeWithinBound } from "../../application/validations/file-size-bound";
 import { isLocaleFilename } from "../../application/validations/locale-filename-shape";
 
-/**
- * Cache entry: a parsed object snapshot.
- */
 interface FileCacheEntry {
   readonly value: {
     readonly object: Record<string, unknown>;
@@ -43,10 +33,6 @@ export class LocaleFileRepository {
     this.cacheTtlMs = options.cacheTtlMs ?? 5 * 60 * 1000;
   }
 
-  /**
-   * The resolved root all paths are validated against. Services use this to
-   * resolve relative inputs instead of assuming `process.cwd()`.
-   */
   get root(): string {
     return this.projectRoot;
   }
@@ -129,15 +115,6 @@ export class LocaleFileRepository {
   }
 }
 
-// ============================================================================
-// Pure Functions: Locale Object Parser
-// ============================================================================
-
-/**
- * Internal parser failure carrying the position; `read()` converts it into
- * the public `LocaleParseError` (which needs the file path the parser
- * does not know about).
- */
 class ParseFailure extends Error {
   constructor(
     readonly position: number,
@@ -174,10 +151,6 @@ class ObjectLiteralParser {
 
   constructor(private readonly source: string) {}
 
-  /**
-   * Parse the whole source as a single object literal (surrounding whitespace
-   * and comments allowed, trailing content rejected).
-   */
   parse(): Record<string, unknown> {
     this.skipWhitespace();
     const result = this.parseObject();
@@ -198,7 +171,7 @@ class ObjectLiteralParser {
       return result;
     }
 
-    for (;;) { // eslint-disable-line no-constant-condition
+    for (;;) {
       this.skipWhitespace();
       const key = this.parseKey();
       this.skipWhitespace();
@@ -262,7 +235,7 @@ class ObjectLiteralParser {
       this.pos++;
       return result;
     }
-    for (;;) { // eslint-disable-line no-constant-condition
+    for (;;) {
       this.skipWhitespace();
       result.push(this.parseValue());
       this.skipWhitespace();

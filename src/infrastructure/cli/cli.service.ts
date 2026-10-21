@@ -1,8 +1,3 @@
-/**
- * CLI Service - Public API
- * @description Composes LocaleSyncService and LocaleTranslateService behind
- * a simple façade. Backwards-compatible with the original CLI service.
- */
 import { LocaleFileRepository } from "../persistence/locale-file.repository";
 import { googleTranslateService } from "../../application/strategies/google-translate.strategy";
 import { LocaleSyncService, type SyncCommandOptions } from "./locale-sync.service";

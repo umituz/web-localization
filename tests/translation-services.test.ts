@@ -1,8 +1,3 @@
-/**
- * Tests for translation application services:
- * TranslationCache, VariableProtector, TextValidator, ObjectTreeWalker,
- * TranslationStats.
- */
 import { describe, expect, it } from "vitest";
 import { TranslationCache } from "../src/application/services/translation-cache";
 import { VariableProtector } from "../src/application/services/variable-protector";
@@ -86,11 +81,9 @@ describe("ObjectTreeWalker", () => {
       count: 5,
       skip: true,
     };
-    const target = { nav: { home: "Ana Sayfa" } }; // home already translated
+    const target = { nav: { home: "Ana Sayfa" } };
     const leaves = walker.collectLeaves(source, target, "", "tr" as never, false);
 
-    // Only the untranslated nested leaf is collected; home is done, and
-    // non-strings (count, skip) are ignored.
     expect(leaves.map((l) => l.path)).toEqual(["nav.nested.deep"]);
   });
 
@@ -118,7 +111,7 @@ describe("ObjectTreeWalker", () => {
 
     expect(target.a).toBe("merhaba");
     expect(stats.successCount).toBe(1);
-    expect(stats.failureCount).toBe(1); // "world" had no translation
+    expect(stats.failureCount).toBe(1);
     expect(progressed).toEqual(["a"]);
   });
 });

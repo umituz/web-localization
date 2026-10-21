@@ -1,12 +1,3 @@
-/**
- * Translation Cache
- * @description LRU cache for translation results. Keyed by source|target|text.
- *
- * Why a separate class:
- * - Testable in isolation
- * - Reusable across strategies (Google, DeepL, etc.)
- * - Cache statistics isolated from translation logic
- */
 import { LRUCache } from "../../core/utils/lru-cache";
 import { CACHE } from "../../core/constants";
 

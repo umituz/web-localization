@@ -1,15 +1,5 @@
-/**
- * Default translator — the zero-config fallback when no i18n runtime
- * is provided. Humanizes catalog keys into sentence case
- * ("auth.login.welcomeBack" → "Welcome back") and interpolates
- * `{{param}}` placeholders when the humanized text carries one.
- * Params the text cannot place are ignored — real interpolation is
- * the runtime's job via the I18nProvider bridge.
- */
-
 import type { TranslateFn } from "./types";
 
-/** Split a key segment into words: camelCase, snake_case, kebab-case. */
 const WORD_SPLIT = /[._-]+|(?<=[a-z0-9])(?=[A-Z])/g;
 
 const humanizeSegment = (segment: string): string => {
@@ -19,7 +9,6 @@ const humanizeSegment = (segment: string): string => {
   return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 };
 
-/** Replace `{{param}}` placeholders with param values. */
 const interpolate = (text: string, params?: Record<string, unknown>): string => {
   if (!params) return text;
   return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name: string) =>

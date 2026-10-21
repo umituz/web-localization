@@ -1,13 +1,3 @@
-/**
- * i18n Core
- * @description Owns the i18next instance and initialization state.
- * Single responsibility: lifecycle management of the i18n singleton.
- *
- * Idempotency: initialization is one-shot per core instance. Calling
- * `initialize()` after success returns the existing instance.
- * Detecting a conflicting re-initialization (different resources) is
- * `setupI18n`'s responsibility — it compares fingerprints before reuse.
- */
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
@@ -34,20 +24,10 @@ export class I18nCore {
     private readonly options: I18nCoreOptions
   ) {}
 
-  /**
-   * Fingerprint of the configuration this core was built from. Callers use it
-   * to detect conflicting re-initialization (same core, different resources).
-   */
   get signature(): string {
     return this.options.builder.signature();
   }
 
-  /**
-   * Initialize i18next. Idempotent per core instance — re-calling after
-   * success returns the existing instance. Conflict detection (initializing
-   * the shared core with different resources) lives in `setupI18n`, which is
-   * the only place where a *different* configuration can be observed.
-   */
   initialize(): I18nInstance {
     if (this.initialized && this.instance.isInitialized) {
       return this.instance;
@@ -85,9 +65,6 @@ export class I18nCore {
     return this.instance;
   }
 
-  /**
-   * Awaitable initialization. Prefer this for code that needs to know when init is done.
-   */
   async whenReady(): Promise<I18nInstance> {
     if (this.initialized && this.instance.isInitialized) {
       return this.instance;
@@ -109,9 +86,6 @@ export class I18nCore {
     return this.initialized && this.instance.isInitialized;
   }
 
-  /**
-   * Reset initialization state and clear resources. Primarily for tests.
-   */
   reset(): void {
     this.initialized = false;
     this.initializationPromise = null;

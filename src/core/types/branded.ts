@@ -1,7 +1,3 @@
-/**
- * Branded Types - Type-safe primitives
- * @description Prevents accidental mixing of similar primitive types (e.g., LanguageCode vs Path).
- */
 declare const __brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [__brand]: B };
 

@@ -1,13 +1,3 @@
-/**
- * Generic LRU Cache
- * @description Bounded Map that evicts least-recently-used entries on overflow.
- * Uses JavaScript Map's insertion-order semantics for O(1) LRU operations.
- *
- * Optional TTL is tracked internally per entry (the stored value is never
- * mutated or wrapped), so TTL works for primitives like strings.
- *
- * Eviction is delegated to the cache-eviction-selector calculation.
- */
 import {
   selectOldestEvictionKey,
   shouldEvictToMakeRoom,
@@ -20,7 +10,7 @@ interface TimedEntry<V> {
 }
 
 export class LRUCache<K, V> {
-  /** Untimed entries store the value directly; timed ones wrap it. */
+
   private readonly store = new Map<K, V | TimedEntry<V>>();
   private readonly maxSize: number;
   private readonly ttlMs: number | null;
@@ -45,7 +35,6 @@ export class LRUCache<K, V> {
       return undefined;
     }
 
-    // Refresh recency (Map re-insertion moves the key to the end).
     this.store.delete(key);
     this.store.set(key, entry);
     return this.unwrap(entry);
@@ -87,10 +76,6 @@ export class LRUCache<K, V> {
     return { size: this.store.size, maxSize: this.maxSize };
   }
 
-  // --------------------------------------------------------------------------
-  // Internal
-  // --------------------------------------------------------------------------
-
   private wrap(value: V): V | TimedEntry<V> {
     if (this.ttlMs === null) return value;
     return { value, cachedAt: Date.now() };
@@ -106,11 +91,6 @@ export class LRUCache<K, V> {
   }
 }
 
-/**
- * TTL-stamped entry shape.
- * @deprecated No longer used by `LRUCache` — TTL is tracked internally since
- * v1.2.0. Kept only for backwards compatibility of the public type surface.
- */
 export interface TTLEntry<V> {
   readonly value: V;
   readonly expiresAt: number;

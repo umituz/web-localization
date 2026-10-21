@@ -1,11 +1,3 @@
-/**
- * Config Field Shape Guard
- * @description Asserts that a config field has the expected primitive shape.
- * Throws `InvalidConfigError` with the field name and reason on failure.
- *
- * Why: catching misconfiguration at startup (vs. mid-translation) is critical
- * for a good developer experience.
- */
 import { InvalidConfigError } from "../../core/errors";
 
 export type ConfigPrimitive = "string" | "number" | "boolean" | "integer";

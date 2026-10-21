@@ -1,26 +1,13 @@
-/**
- * Domain Error Hierarchy
- * @description Typed errors for the localization domain.
- * Each error carries a stable code (for programmatic handling) and a human message.
- *
- * Why a hierarchy: callers can `instanceof` check specific error types or just
- * read `error.code` for a stringly-typed dispatch. Both work.
- */
-
 export abstract class LocalizationError extends Error {
   abstract readonly code: string;
 
   constructor(message: string, public readonly cause?: unknown) {
     super(message);
     this.name = this.constructor.name;
-    // Preserve prototype chain when targeting ES5 (TS down-leveling)
+
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
-
-// ============================================================================
-// File System Errors
-// ============================================================================
 
 export class LocaleFileNotFoundError extends LocalizationError {
   readonly code = "LOCALE_FILE_NOT_FOUND";
@@ -60,10 +47,6 @@ export class PathTraversalError extends LocalizationError {
   }
 }
 
-// ============================================================================
-// Translation Errors
-// ============================================================================
-
 export class TranslationHttpError extends LocalizationError {
   readonly code = "TRANSLATION_HTTP_ERROR";
   constructor(
@@ -102,10 +85,6 @@ export class TranslationAbortedError extends LocalizationError {
     super("Translation was aborted");
   }
 }
-
-// ============================================================================
-// Configuration Errors
-// ============================================================================
 
 export class InvalidConfigError extends LocalizationError {
   readonly code = "INVALID_CONFIG";

@@ -1,7 +1,3 @@
-/**
- * Tests for GoogleTranslateStrategy and GoogleTranslateHttpClient using an
- * injected fake fetch — no network access.
- */
 import { describe, expect, it, vi } from "vitest";
 import { GoogleTranslateStrategy } from "../src/application/strategies/google-translate.strategy";
 import { GoogleTranslateHttpClient } from "../src/infrastructure/http/translation-http.client";
@@ -12,7 +8,6 @@ import {
   TranslationTimeoutError,
 } from "../src/core/errors";
 
-/** Google's endpoint returns [[["translated", "source", null, null, ...], ...], ...] */
 function googleResponse(translated: string): Response {
   return new Response(JSON.stringify([[[translated, "source", null, null]]]), {
     status: 200,
@@ -40,7 +35,7 @@ describe("GoogleTranslateStrategy.translate", () => {
       success: true,
       translatedText: "Merhaba Dünya",
     });
-    expect(response.cached ?? false).toBe(false); // absent on the first fetch
+    expect(response.cached ?? false).toBe(false);
     const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
     expect(calledUrl).toContain("tl=tr");
     expect(calledUrl).toContain("sl=en");
@@ -69,8 +64,7 @@ describe("GoogleTranslateStrategy.translate", () => {
 
   it("protects {{placeholders}} end-to-end", async () => {
     const fetchImpl = vi.fn(async (url: unknown) => {
-      // Echo back the protected text as the "translation".
-      // Use URLSearchParams decoding — the builder encodes spaces as "+".
+
       const q = new URL(String(url)).searchParams.get("q") ?? "";
       return googleResponse(q);
     });
@@ -89,7 +83,7 @@ describe("GoogleTranslateStrategy.translate", () => {
 
     const response = await strategy.translate({ text: "Hello", targetLanguage: "tr" as never });
     expect(response.success).toBe(false);
-    expect(response.translatedText).toBe("Hello"); // original preserved
+    expect(response.translatedText).toBe("Hello");
     expect(response.error).toBeDefined();
   });
 
@@ -124,7 +118,7 @@ describe("GoogleTranslateStrategy.translateBatch", () => {
     const stats = await strategy.translateBatch([
       { text: "hello", targetLanguage: "tr" as never },
       { text: "world", targetLanguage: "tr" as never },
-      { text: "42", targetLanguage: "tr" as never }, // skipped: pure number
+      { text: "42", targetLanguage: "tr" as never },
     ]);
 
     expect(stats.successCount).toBe(1);
@@ -190,7 +184,6 @@ describe("GoogleTranslateHttpClient", () => {
         );
       });
 
-    // External abort wins over timeout:
     const controller = new AbortController();
     const abortClient = new GoogleTranslateHttpClient(protector, {
       timeoutMs: 5000,
@@ -201,7 +194,6 @@ describe("GoogleTranslateHttpClient", () => {
       abortClient.translate("hi", "en", "tr", controller.signal)
     ).rejects.toThrow(TranslationAbortedError);
 
-    // Internal timeout:
     const timeoutClient = new GoogleTranslateHttpClient(protector, {
       timeoutMs: 5,
       fetchImpl: hanging as unknown as typeof fetch,
@@ -213,7 +205,7 @@ describe("GoogleTranslateHttpClient", () => {
 
   it("rejects construction when fetch is unavailable", () => {
     const original = globalThis.fetch;
-    // @ts-expect-error — simulate a fetch-less environment
+
     globalThis.fetch = undefined;
     expect(
       () =>

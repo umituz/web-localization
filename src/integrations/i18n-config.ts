@@ -1,13 +1,3 @@
-/**
- * i18n Configuration Builder
- * @description Builder for i18next init options. Single responsibility:
- * construct a valid, optimized configuration from high-level inputs.
- *
- * Fix vs. previous version:
- * - Removed invalid `cache: { enabled: true }` option (not a real i18next config)
- * - Made `saveMissing` configurable
- * - Format function now handles null/undefined safely
- */
 import i18n from "i18next";
 import { applyTextCase } from "../application/calculations/text-case-applier";
 
@@ -42,10 +32,6 @@ export interface BuiltI18nConfig {
   readonly onBeforeInit?: (instance: typeof i18n) => void;
 }
 
-/**
- * A stable string fingerprint of the input. Used to detect conflicting
- * re-initialization with different resources.
- */
 export function computeConfigSignature(input: I18nConfigBuilderInput): string {
   const langs = Object.keys(input.resources).sort().join(",");
   return `${input.defaultLng ?? "en-US"}|${langs}`;
@@ -58,10 +44,6 @@ export class I18nConfigBuilder {
     this.input = input;
   }
 
-  /**
-   * A stable string fingerprint of the input. Used to detect conflicting
-   * re-initialization with different resources.
-   */
   signature(): string {
     return computeConfigSignature(this.input);
   }

@@ -1,6 +1,3 @@
-/**
- * Tests for pure calculation functions (public API surface).
- */
 import { describe, expect, it } from "vitest";
 import {
   applyTextCase,
@@ -62,7 +59,7 @@ describe("buildGoogleTranslateUrl", () => {
 
 describe("mergeTranslationSegments", () => {
   it("joins the first element of each segment", () => {
-    // Google's data[0] is an array of [translated, original, ...] segments.
+
     expect(
       mergeTranslationSegments([["Merhaba", null], [" ", null], ["Dünya", null]])
     ).toBe("Merhaba Dünya");
@@ -71,7 +68,7 @@ describe("mergeTranslationSegments", () => {
   it("returns empty string for empty input and skips malformed segments", () => {
     expect(mergeTranslationSegments([])).toBe("");
     expect(mergeTranslationSegments([[], [null], [["nested"]]])).toBe("");
-    // Non-array segments (defensive shape) are skipped entirely.
+
     expect(mergeTranslationSegments(["raw string segment"] as never)).toBe("");
   });
 });
@@ -151,7 +148,7 @@ describe("SlidingWindowAverage", () => {
     window.add(20);
     window.add(30);
     expect(window.average()).toBe(20);
-    window.add(40); // drops 10
+    window.add(40);
     expect(window.average()).toBe(30);
   });
 

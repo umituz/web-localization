@@ -1,8 +1,3 @@
-/**
- * Progress Event Emitter
- * @description Typed event emitter for translation progress.
- * Decouples progress reporting from any specific consumer (CLI, UI, test).
- */
 import type { Iso639Code } from "../types/branded";
 
 export type ProgressEvent =
@@ -65,7 +60,7 @@ export class ProgressEmitter {
       try {
         listener(event);
       } catch (err) {
-        // eslint-disable-next-line no-console
+
         console.error("[ProgressEmitter] listener threw:", err);
       }
     }
@@ -83,12 +78,9 @@ export class ProgressEmitter {
   }
 }
 
-/**
- * No-op emitter for tests / default.
- */
 export class NullProgressEmitter extends ProgressEmitter {
   override emit(): void {
-    // intentionally empty
+
   }
 }
 

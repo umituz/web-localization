@@ -1,7 +1,3 @@
-/**
- * Locale Sync Service
- * @description Synchronizes locale file structure with a base language.
- */
 import * as path from "path";
 import { Semaphore } from "../../core/utils/semaphore";
 import { LocaleFileNotFoundError } from "../../core/errors";
@@ -39,9 +35,7 @@ export class LocaleSyncService {
   ) {}
 
   async run(options: SyncCommandOptions): Promise<SyncResult> {
-    // Resolve against the repository's root, not process.cwd() — the
-    // repository enforces its own project root, so a cwd-relative path would
-    // be rejected as path traversal when they differ.
+
     const localesDir = path.resolve(this.repository.root, options.localesDir);
     const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
 

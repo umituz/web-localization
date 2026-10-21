@@ -1,6 +1,3 @@
-/**
- * Tests for validation guards (public API surface).
- */
 import { describe, expect, it } from "vitest";
 import {
   assertPathWithinProjectRoot,

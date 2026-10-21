@@ -1,8 +1,3 @@
-/**
- * Integration tests for LocaleFileRepository against a real temp directory:
- * read/write round-trip, caching, listLocales, typed errors, traversal guard,
- * and the pure serialize/sync helpers.
- */
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +22,7 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  // Best-effort cleanup of any leftover temp dirs.
+
   rmSync(projectRoot, { recursive: true, force: true });
 });
 
@@ -88,11 +83,9 @@ describe("LocaleFileRepository.read", () => {
     writeFileSync(join(projectRoot, "en-US.ts"), `export default { a: "1" };`);
     expect(await repository.read("en-US.ts")).toEqual({ a: "1" });
 
-    // Same content on disk, changed externally — still cached:
     writeFileSync(join(projectRoot, "en-US.ts"), `export default { a: "2" };`);
     expect(await repository.read("en-US.ts")).toEqual({ a: "1" });
 
-    // A write through the repository invalidates the cache:
     await repository.write("en-US.ts", { a: "3" }, "en-US");
     expect(await repository.read("en-US.ts")).toEqual({ a: "3" });
   });

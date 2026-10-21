@@ -1,16 +1,3 @@
-/**
- * Text Case Applier
- * @description Applies named text-case transformations used by i18next
- * interpolation `format` callbacks. Returns the input unchanged when
- * no known case is specified.
- *
- * Supported cases:
- * - "uppercase"   → "hello"   → "HELLO"
- * - "lowercase"   → "HELLO"   → "hello"
- * - "capitalize"  → "hello"   → "Hello"
- * - "titlecase"   → "hello world" → "Hello World"
- * - undefined/""  → unchanged
- */
 export type TextCaseFormat = "uppercase" | "lowercase" | "capitalize" | "titlecase" | "" | undefined;
 
 export function applyTextCase(value: unknown, format: TextCaseFormat | string | undefined): string {

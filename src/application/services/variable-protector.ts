@@ -1,8 +1,3 @@
-/**
- * Variable Protector - Preserves {{placeholders}} during translation
- * @description Composes the variable-placeholder-factory to provide a clean
- * protect/restore contract. Stateful only via the counter passed in.
- */
 import { GOOGLE_TRANSLATE } from "../../core/constants";
 import {
   buildVariablePlaceholder,
@@ -15,10 +10,7 @@ export interface ProtectedText {
 }
 
 export class VariableProtector {
-  /**
-   * Replace all {{token}} occurrences in text with safe placeholders.
-   * The placeholders map records the substitution for later restoration.
-   */
+
   protect(text: string): ProtectedText {
     const placeholders = new Map<string, string>();
     let counter = 0;
@@ -36,10 +28,6 @@ export class VariableProtector {
     return { safeText, placeholders };
   }
 
-  /**
-   * Restore original {{token}} placeholders in translated text.
-   * Tolerant to whitespace inserted by the translator between characters.
-   */
   restore(translated: string, placeholders: ReadonlyMap<string, string>): string {
     if (placeholders.size === 0) return translated;
 
