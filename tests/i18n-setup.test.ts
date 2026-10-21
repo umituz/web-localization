@@ -23,6 +23,7 @@ function options(overrides: Record<string, unknown> = {}) {
 afterEach(() => {
   resetI18n();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("setupI18n", () => {
@@ -92,6 +93,28 @@ describe("I18nHandle", () => {
     await handle.whenReady();
     expect(handle.getLanguages()).toEqual(["en", "tr"]);
     expect(handle.getFallbackLanguage()).toBe("en");
+    expect(handle.getCurrentLanguage()).toBe("en");
+  });
+
+  it("resolves the boot language synchronously from a stored preference", () => {
+    const store: Record<string, string> = { i18nextLng: "tr" };
+    vi.stubGlobal("window", {
+      localStorage: { getItem: (key: string) => store[key] ?? null },
+    });
+    const handle = setupI18n(
+      options({ detection: { order: ["localStorage"], caches: [] } })
+    );
+    expect(handle.getCurrentLanguage()).toBe("tr");
+  });
+
+  it("falls back when the stored language is not configured", () => {
+    const store: Record<string, string> = { i18nextLng: "de" };
+    vi.stubGlobal("window", {
+      localStorage: { getItem: (key: string) => store[key] ?? null },
+    });
+    const handle = setupI18n(
+      options({ detection: { order: ["localStorage"], caches: [] } })
+    );
     expect(handle.getCurrentLanguage()).toBe("en");
   });
 

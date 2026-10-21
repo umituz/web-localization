@@ -43,6 +43,7 @@ type InitOptions = Parameters<typeof i18n.init>[0];
 
 const DETECTION_ORDER = ["localStorage", "navigator"] as const;
 const DETECTION_CACHES = ["localStorage"] as const;
+const STORAGE_KEY = "i18nextLng";
 
 interface LanguagePlan<Lng extends string> {
   readonly languages: readonly Lng[];
@@ -66,9 +67,54 @@ function configSignature(plan: LanguagePlan<string>): string {
   return `${plan.fallbackLanguage}|${[...plan.languages].sort().join(",")}`;
 }
 
+function matchLanguage<Lng extends string>(
+  languages: readonly Lng[],
+  candidate: string | null | undefined
+): Lng | undefined {
+  if (!candidate) return undefined;
+  if (languages.includes(candidate as Lng)) return candidate as Lng;
+  const base = candidate.split("-")[0].toLowerCase();
+  return languages.find((lng) => lng.toLowerCase() === base);
+}
+
+function detectionCandidates(
+  source: string,
+  detection: DetectionOptions
+): readonly (string | null)[] {
+  if (source === "localStorage" && typeof window !== "undefined") {
+    return [window.localStorage.getItem(detection.lookupLocalStorage ?? STORAGE_KEY)];
+  }
+  if (source === "sessionStorage" && typeof window !== "undefined") {
+    return [
+      window.sessionStorage.getItem(detection.lookupSessionStorage ?? STORAGE_KEY),
+    ];
+  }
+  if (source === "navigator" && typeof navigator !== "undefined") {
+    return [...(navigator.languages ?? [navigator.language])];
+  }
+  if (source === "htmlTag" && typeof document !== "undefined") {
+    return [document.documentElement.lang || null];
+  }
+  return [];
+}
+
+function resolveBootLanguage<Lng extends string>(
+  plan: LanguagePlan<Lng>,
+  detection: DetectionOptions
+): Lng {
+  for (const source of detection.order ?? DETECTION_ORDER) {
+    for (const candidate of detectionCandidates(source, detection)) {
+      const match = matchLanguage(plan.languages, candidate);
+      if (match) return match;
+    }
+  }
+  return plan.initialLanguage;
+}
+
 function buildInitOptions<Lng extends string>(
   options: SetupI18nOptions<Lng>,
-  plan: LanguagePlan<Lng>
+  plan: LanguagePlan<Lng>,
+  bootLanguage: Lng
 ): InitOptions {
   const {
     detection = {},
@@ -84,7 +130,7 @@ function buildInitOptions<Lng extends string>(
 
   return {
     resources: lazyLoad ? undefined : bundled,
-    lng: plan.initialLanguage,
+    lng: bootLanguage,
     fallbackLng: plan.fallbackLanguage,
     initImmediate: false,
     load: lazyLoad ? "languageOnly" : "all",
@@ -100,7 +146,7 @@ function buildInitOptions<Lng extends string>(
       format: (value, format) => applyTextCase(value, format),
     },
     detection: {
-      order: [...(detection.order ?? DETECTION_ORDER)],
+      order: [],
       caches: [...(detection.caches ?? DETECTION_CACHES)],
       ...(detection.lookupLocalStorage
         ? { lookupLocalStorage: detection.lookupLocalStorage }
@@ -131,31 +177,32 @@ function resolveConfiguredLanguage<Lng extends string>(
 
 function bindLanguageEffects<Lng extends string>(
   plan: LanguagePlan<Lng>,
-  options: SetupI18nOptions<Lng>
+  options: SetupI18nOptions<Lng>,
+  setCurrentLanguage: (lng: Lng) => void
 ): () => void {
   const cleanups: (() => void)[] = [];
+  const initialDocumentLang =
+    typeof document !== "undefined" ? document.documentElement.lang : null;
 
-  if (typeof document !== "undefined") {
-    const initialLang = document.documentElement.lang;
-    const apply = () => {
-      document.documentElement.lang = resolveConfiguredLanguage(
-        plan,
-        i18n.resolvedLanguage ?? i18n.language
-      );
-    };
-    apply();
-    i18n.on("languageChanged", apply);
-    cleanups.push(() => {
-      i18n.off("languageChanged", apply);
-      document.documentElement.lang = initialLang;
-    });
-  }
+  const listener = (raw: string) => {
+    const lng = resolveConfiguredLanguage(plan, raw);
+    setCurrentLanguage(lng);
+    if (typeof document !== "undefined") document.documentElement.lang = lng;
+  };
+  listener(i18n.resolvedLanguage ?? i18n.language);
+  i18n.on("languageChanged", listener);
+  cleanups.push(() => {
+    i18n.off("languageChanged", listener);
+    if (typeof document !== "undefined" && initialDocumentLang !== null) {
+      document.documentElement.lang = initialDocumentLang;
+    }
+  });
 
   if (options.onLanguageChange) {
-    const listener = (lng: string) =>
-      options.onLanguageChange!(resolveConfiguredLanguage(plan, lng));
-    i18n.on("languageChanged", listener);
-    cleanups.push(() => i18n.off("languageChanged", listener));
+    const callback = options.onLanguageChange;
+    const typed = (raw: string) => callback(resolveConfiguredLanguage(plan, raw));
+    i18n.on("languageChanged", typed);
+    cleanups.push(() => i18n.off("languageChanged", typed));
   }
 
   return () => cleanups.forEach((cleanup) => cleanup());
@@ -195,7 +242,9 @@ function createHandle<Lng extends string>(
   options: SetupI18nOptions<Lng>,
   plan: LanguagePlan<Lng>
 ): I18nHandle<Lng> {
-  const initOptions = buildInitOptions(options, plan);
+  const bootLanguage = resolveBootLanguage(plan, options.detection ?? {});
+  const initOptions = buildInitOptions(options, plan, bootLanguage);
+  let currentLanguage: Lng = bootLanguage;
   let initialized = false;
   let initializationPromise: Promise<void> | null = null;
   let detachEffects: (() => void) | null = null;
@@ -209,7 +258,9 @@ function createHandle<Lng extends string>(
       .init(initOptions)
       .then(() => {
         initialized = true;
-        detachEffects = bindLanguageEffects(plan, options);
+        detachEffects = bindLanguageEffects(plan, options, (lng) => {
+          currentLanguage = lng;
+        });
         if (options.onInit) options.onInit(i18n);
       })
       .catch((error: unknown) => {
@@ -239,9 +290,9 @@ function createHandle<Lng extends string>(
     changeLanguage: async (lng) => {
       assertInitialized();
       await i18n.changeLanguage(lng);
+      currentLanguage = resolveConfiguredLanguage(plan, lng);
     },
-    getCurrentLanguage: () =>
-      resolveConfiguredLanguage(plan, i18n.resolvedLanguage ?? i18n.language),
+    getCurrentLanguage: () => currentLanguage,
     getFallbackLanguage: () => plan.fallbackLanguage,
     getLanguages: () => plan.languages,
     isInitialized: () => initialized && i18n.isInitialized,
