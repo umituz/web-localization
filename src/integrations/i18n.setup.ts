@@ -3,10 +3,10 @@ import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { applyTextCase } from "../application/calculations/text-case-applier";
 import { AlreadyInitializedError } from "../core/errors";
-import { LOCALE } from "../core/constants";
 
 export type I18nInstance = typeof i18n;
 export type I18nInitCallback = (instance: I18nInstance) => void;
+export type LanguageChangeCallback<Lng extends string = string> = (lng: Lng) => void;
 
 export interface DetectionOptions {
   readonly order?: readonly string[];
@@ -22,11 +22,12 @@ export interface SeoIntegrationOptions {
   readonly twitterHandle?: string;
 }
 
-export interface SetupI18nOptions {
-  readonly resources: Record<string, { translation: Record<string, unknown> }>;
-  readonly defaultLng?: string;
-  readonly fallbackLng?: string;
+export interface SetupI18nOptions<Lng extends string = string> {
+  readonly resources: Record<Lng, { translation: Record<string, unknown> }>;
+  readonly fallbackLanguage?: Lng;
+  readonly initialLanguage?: Lng;
   readonly onInit?: I18nInitCallback;
+  readonly onLanguageChange?: LanguageChangeCallback<Lng>;
   readonly detection?: DetectionOptions;
   readonly seo?: SeoIntegrationOptions;
   readonly lazyLoad?: boolean;
@@ -34,18 +35,16 @@ export interface SetupI18nOptions {
   readonly reactUseSuspense?: boolean;
 }
 
-export interface I18nHandle {
+export interface I18nHandle<Lng extends string = string> {
   readonly instance: I18nInstance;
-  readonly addLanguage: (
-    lng: string,
-    resources: Record<string, unknown>,
-    ns?: string
-  ) => void;
-  readonly changeLanguage: (lng: string) => Promise<void>;
-  readonly getCurrentLanguage: () => string;
-  readonly isInitialized: () => boolean;
-  readonly reset: () => void;
-  readonly whenReady: () => Promise<I18nInstance>;
+  addLanguage(lng: string, resources: Record<string, unknown>, ns?: string): void;
+  changeLanguage(lng: Lng): Promise<void>;
+  getCurrentLanguage(): Lng;
+  getFallbackLanguage(): Lng;
+  getLanguages(): readonly Lng[];
+  isInitialized(): boolean;
+  reset(): void;
+  whenReady(): Promise<I18nInstance>;
 }
 
 type InitOptions = Parameters<typeof i18n.init>[0];
@@ -53,16 +52,33 @@ type InitOptions = Parameters<typeof i18n.init>[0];
 const DETECTION_ORDER = ["localStorage", "navigator"] as const;
 const DETECTION_CACHES = ["localStorage"] as const;
 
-function configSignature(options: SetupI18nOptions): string {
-  const langs = Object.keys(options.resources).sort().join(",");
-  return `${options.defaultLng ?? LOCALE.DEFAULT_BASE_LANGUAGE}|${langs}`;
+interface LanguagePlan<Lng extends string> {
+  readonly languages: readonly Lng[];
+  readonly fallbackLanguage: Lng;
+  readonly initialLanguage: Lng;
 }
 
-function buildInitOptions(options: SetupI18nOptions): InitOptions {
+function planLanguages<Lng extends string>(
+  options: SetupI18nOptions<Lng>
+): LanguagePlan<Lng> {
+  const languages = Object.keys(options.resources) as Lng[];
+  const fallbackLanguage = options.fallbackLanguage ?? languages[0];
+  return {
+    languages,
+    fallbackLanguage,
+    initialLanguage: options.initialLanguage ?? fallbackLanguage,
+  };
+}
+
+function configSignature(plan: LanguagePlan<string>): string {
+  return `${plan.fallbackLanguage}|${[...plan.languages].sort().join(",")}`;
+}
+
+function buildInitOptions<Lng extends string>(
+  options: SetupI18nOptions<Lng>,
+  plan: LanguagePlan<Lng>
+): InitOptions {
   const {
-    resources,
-    defaultLng = LOCALE.DEFAULT_BASE_LANGUAGE,
-    fallbackLng = LOCALE.DEFAULT_BASE_LANGUAGE,
     detection = {},
     lazyLoad = false,
     saveMissing = false,
@@ -70,19 +86,19 @@ function buildInitOptions(options: SetupI18nOptions): InitOptions {
   } = options;
 
   const bundled: Record<string, { translation: Record<string, unknown> }> = {};
-  for (const [lng, resource] of Object.entries(resources)) {
-    bundled[lng] = { translation: resource.translation ?? {} };
+  for (const lng of plan.languages) {
+    bundled[lng] = { translation: options.resources[lng].translation ?? {} };
   }
 
   return {
     resources: lazyLoad ? undefined : bundled,
-    lng: defaultLng,
-    fallbackLng,
+    lng: plan.initialLanguage,
+    fallbackLng: plan.fallbackLanguage,
     load: lazyLoad ? "languageOnly" : "all",
     preload: lazyLoad ? [] : undefined,
     ...(lazyLoad
       ? {}
-      : { supportedLngs: Object.keys(bundled), nonExplicitSupportedLngs: true }),
+      : { supportedLngs: [...plan.languages], nonExplicitSupportedLngs: true }),
     ns: ["translation"],
     defaultNS: "translation",
     saveMissing,
@@ -111,18 +127,45 @@ function buildInitOptions(options: SetupI18nOptions): InitOptions {
   };
 }
 
-function bindDocumentLanguage(): () => void {
-  if (typeof document === "undefined") return () => undefined;
-  const initialLang = document.documentElement.lang;
-  const apply = () => {
-    document.documentElement.lang = i18n.resolvedLanguage || i18n.language;
-  };
-  apply();
-  i18n.on("languageChanged", apply);
-  return () => {
-    i18n.off("languageChanged", apply);
-    document.documentElement.lang = initialLang;
-  };
+function resolveConfiguredLanguage<Lng extends string>(
+  plan: LanguagePlan<Lng>,
+  lng: string | undefined
+): Lng {
+  return lng && (plan.languages as readonly string[]).includes(lng)
+    ? (lng as Lng)
+    : plan.fallbackLanguage;
+}
+
+function bindLanguageEffects<Lng extends string>(
+  plan: LanguagePlan<Lng>,
+  options: SetupI18nOptions<Lng>
+): () => void {
+  const cleanups: (() => void)[] = [];
+
+  if (typeof document !== "undefined") {
+    const initialLang = document.documentElement.lang;
+    const apply = () => {
+      document.documentElement.lang = resolveConfiguredLanguage(
+        plan,
+        i18n.resolvedLanguage ?? i18n.language
+      );
+    };
+    apply();
+    i18n.on("languageChanged", apply);
+    cleanups.push(() => {
+      i18n.off("languageChanged", apply);
+      document.documentElement.lang = initialLang;
+    });
+  }
+
+  if (options.onLanguageChange) {
+    const listener = (lng: string) =>
+      options.onLanguageChange!(resolveConfiguredLanguage(plan, lng));
+    i18n.on("languageChanged", listener);
+    cleanups.push(() => i18n.off("languageChanged", listener));
+  }
+
+  return () => cleanups.forEach((cleanup) => cleanup());
 }
 
 function attachSeo(seo: SeoIntegrationOptions): void {
@@ -136,11 +179,14 @@ function attachSeo(seo: SeoIntegrationOptions): void {
     });
 }
 
-let activeHandle: I18nHandle | null = null;
+let activeHandle: I18nHandle<string> | null = null;
 let activeSignature: string | null = null;
 
-export function setupI18n(options: SetupI18nOptions): I18nHandle {
-  const signature = configSignature(options);
+export function setupI18n<Lng extends string = string>(
+  options: SetupI18nOptions<Lng>
+): I18nHandle<Lng> {
+  const plan = planLanguages(options);
+  const signature = configSignature(plan);
 
   if (activeHandle && activeSignature !== signature) {
     throw new AlreadyInitializedError(
@@ -149,12 +195,12 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   }
 
   if (!activeHandle) {
-    activeHandle = createHandle(options, buildInitOptions(options));
+    activeHandle = createHandle(options, plan);
     activeSignature = signature;
   }
 
   void activeHandle.whenReady();
-  return activeHandle;
+  return activeHandle as I18nHandle<Lng>;
 }
 
 export function resetI18n(): void {
@@ -163,10 +209,14 @@ export function resetI18n(): void {
   activeSignature = null;
 }
 
-function createHandle(options: SetupI18nOptions, initOptions: InitOptions): I18nHandle {
+function createHandle<Lng extends string>(
+  options: SetupI18nOptions<Lng>,
+  plan: LanguagePlan<Lng>
+): I18nHandle<Lng> {
+  const initOptions = buildInitOptions(options, plan);
   let initialized = false;
   let initializationPromise: Promise<void> | null = null;
-  let unbindDocumentLanguage: (() => void) | null = null;
+  let detachEffects: (() => void) | null = null;
 
   const start = (): Promise<void> => {
     if (initializationPromise) return initializationPromise;
@@ -177,7 +227,7 @@ function createHandle(options: SetupI18nOptions, initOptions: InitOptions): I18n
       .init(initOptions)
       .then(() => {
         initialized = true;
-        unbindDocumentLanguage = bindDocumentLanguage();
+        detachEffects = bindLanguageEffects(plan, options);
         if (options.seo) attachSeo(options.seo);
         if (options.onInit) options.onInit(i18n);
       })
@@ -195,7 +245,7 @@ function createHandle(options: SetupI18nOptions, initOptions: InitOptions): I18n
     }
   };
 
-  const handle: I18nHandle = {
+  const handle: I18nHandle<Lng> = {
     instance: i18n,
     addLanguage: (lng, resources, ns = "translation") => {
       assertInitialized();
@@ -210,14 +260,13 @@ function createHandle(options: SetupI18nOptions, initOptions: InitOptions): I18n
       await i18n.changeLanguage(lng);
     },
     getCurrentLanguage: () =>
-      i18n.resolvedLanguage ||
-      i18n.language ||
-      i18n.languages[0] ||
-      LOCALE.DEFAULT_BASE_LANGUAGE,
+      resolveConfiguredLanguage(plan, i18n.resolvedLanguage ?? i18n.language),
+    getFallbackLanguage: () => plan.fallbackLanguage,
+    getLanguages: () => plan.languages,
     isInitialized: () => initialized && i18n.isInitialized,
     reset: () => {
-      unbindDocumentLanguage?.();
-      unbindDocumentLanguage = null;
+      detachEffects?.();
+      detachEffects = null;
       initialized = false;
       initializationPromise = null;
       if (i18n.isInitialized) {

@@ -17,8 +17,7 @@ function options(overrides: Record<string, unknown> = {}) {
       string,
       { translation: Record<string, unknown> }
     >,
-    defaultLng: "en",
-    fallbackLng: "en",
+    fallbackLanguage: "en",
     detection: { order: [], caches: [] },
     ...overrides,
   };
@@ -101,6 +100,14 @@ describe("I18nHandle", () => {
     await handle.whenReady();
     expect(typeof handle.getCurrentLanguage()).toBe("string");
     expect(handle.getCurrentLanguage().length).toBeGreaterThan(0);
+  });
+
+  it("exposes the configured language plan", async () => {
+    const handle = setupI18n(options());
+    await handle.whenReady();
+    expect(handle.getLanguages()).toEqual(["en", "tr"]);
+    expect(handle.getFallbackLanguage()).toBe("en");
+    expect(handle.getCurrentLanguage()).toBe("en");
   });
 
   it("reset clears initialization state", async () => {
