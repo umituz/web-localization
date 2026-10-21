@@ -18,6 +18,7 @@ export interface I18nCoreOptions {
 export class I18nCore {
   private initialized = false;
   private initializationPromise: Promise<I18nInstance> | null = null;
+  private detachLanguageSync: (() => void) | null = null;
 
   constructor(
     private readonly instance: I18nInstance = i18n,
@@ -46,6 +47,7 @@ export class I18nCore {
       .init(built.options)
       .then(() => {
         this.initialized = true;
+        this.attachLanguageSync();
 
         if (built.seo && seoIntegrator) {
           seoIntegrator(this.instance, built.seo);
@@ -86,7 +88,24 @@ export class I18nCore {
     return this.initialized && this.instance.isInitialized;
   }
 
+  private attachLanguageSync(): void {
+    if (typeof document === "undefined" || this.detachLanguageSync) return;
+    const initialLang = document.documentElement.lang;
+    const apply = () => {
+      document.documentElement.lang =
+        this.instance.resolvedLanguage || this.instance.language;
+    };
+    apply();
+    this.instance.on("languageChanged", apply);
+    this.detachLanguageSync = () => {
+      this.instance.off("languageChanged", apply);
+      document.documentElement.lang = initialLang;
+      this.detachLanguageSync = null;
+    };
+  }
+
   reset(): void {
+    this.detachLanguageSync?.();
     this.initialized = false;
     this.initializationPromise = null;
     if (this.instance.isInitialized) {

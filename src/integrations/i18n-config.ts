@@ -61,12 +61,14 @@ export class I18nConfigBuilder {
     } = this.input;
 
     const optimizedResources = this.optimizeResources(resources);
+    const supportedLngs = Object.keys(optimizedResources);
 
     const options: Parameters<typeof i18n.init>[0] = {
       resources: lazyLoad ? undefined : optimizedResources,
       lng: defaultLng,
       fallbackLng,
       load: lazyLoad ? "languageOnly" : "all",
+      ...(lazyLoad ? {} : { supportedLngs, nonExplicitSupportedLngs: true }),
       preload: lazyLoad ? [] : undefined,
       ns: ["translation"],
       defaultNS: "translation",

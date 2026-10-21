@@ -55,7 +55,6 @@ export function setupI18n(options: SetupI18nOptions): I18nHandle {
   });
 
   if (globalCore) {
-
     if (globalCore.signature !== incomingSignature) {
       throw new AlreadyInitializedError(
         `i18n (initialized with "${globalCore.signature}", called with "${incomingSignature}"). Call resetI18n() first to re-initialize.`
@@ -110,7 +109,10 @@ function buildHandle(core: I18nCore): I18nHandle {
       if (!core.isInitialized()) {
         throw new Error("i18n is not initialized yet. Call setupI18n first.");
       }
-      core.getInstance().addResourceBundle(lng, ns, resources, true, true);
+      const inst = core.getInstance();
+      const supported = inst.options.supportedLngs as string[] | undefined;
+      if (supported && !supported.includes(lng)) supported.push(lng);
+      inst.addResourceBundle(lng, ns, resources, true, true);
     },
     changeLanguage: async (lng) => {
       if (!core.isInitialized()) {
@@ -120,7 +122,7 @@ function buildHandle(core: I18nCore): I18nHandle {
     },
     getCurrentLanguage: () => {
       const inst = core.getInstance();
-      return inst.language || inst.languages[0] || "en-US";
+      return inst.resolvedLanguage || inst.language || inst.languages[0] || "en-US";
     },
     isInitialized: () => core.isInitialized(),
     reset: () => {
