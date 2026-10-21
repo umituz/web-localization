@@ -118,7 +118,6 @@ export { HTTP, RATE_LIMIT, CACHE, LOCALE, GOOGLE_TRANSLATE, UI } from "./core/co
 export type {
   SetupI18nOptions,
   DetectionOptions,
-  SeoIntegrationOptions,
   I18nHandle,
 } from "./integrations/i18n.setup";
 export { setupI18n, resetI18n } from "./integrations/i18n.setup";

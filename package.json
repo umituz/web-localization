@@ -48,7 +48,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@umituz/web-seo": "^2.0.0",
     "i18next": "^23.0.0 || ^24.0.0 || ^25.0.0",
     "i18next-browser-languagedetector": "^7.0.0 || ^8.0.0",
     "react": "^18.0.0 || ^19.0.0",
@@ -59,7 +58,6 @@
     "@types/react": "^18.3.31",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
-    "@umituz/web-seo": "^2.0.15",
     "commander": "^12.0.0",
     "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
@@ -86,12 +84,6 @@
     },
     "i18next-browser-languagedetector": {
       "optional": true
-    },
-    "@umituz/web-seo": {
-      "optional": true
     }
-  },
-  "dependencies": {
-    "@umituz/web-localization": "^1.5.0"
   }
 }

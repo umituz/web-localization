@@ -15,13 +15,6 @@ export interface DetectionOptions {
   readonly lookupSessionStorage?: string;
 }
 
-export interface SeoIntegrationOptions {
-  readonly titleKey: string;
-  readonly descriptionKey: string;
-  readonly defaultImage?: string;
-  readonly twitterHandle?: string;
-}
-
 export interface SetupI18nOptions<Lng extends string = string> {
   readonly resources: Record<Lng, { translation: Record<string, unknown> }>;
   readonly fallbackLanguage?: Lng;
@@ -29,7 +22,6 @@ export interface SetupI18nOptions<Lng extends string = string> {
   readonly onInit?: I18nInitCallback;
   readonly onLanguageChange?: LanguageChangeCallback<Lng>;
   readonly detection?: DetectionOptions;
-  readonly seo?: SeoIntegrationOptions;
   readonly lazyLoad?: boolean;
   readonly saveMissing?: boolean;
   readonly reactUseSuspense?: boolean;
@@ -169,17 +161,6 @@ function bindLanguageEffects<Lng extends string>(
   return () => cleanups.forEach((cleanup) => cleanup());
 }
 
-function attachSeo(seo: SeoIntegrationOptions): void {
-  void import("@umituz/web-seo")
-    .then(({ initSEO }) => initSEO({ i18n, ...seo }))
-    .catch((error: unknown) => {
-      console.warn(
-        "[web-localization] SEO integration skipped — install @umituz/web-seo to enable it.",
-        error,
-      );
-    });
-}
-
 let activeHandle: I18nHandle<string> | null = null;
 let activeSignature: string | null = null;
 
@@ -229,7 +210,6 @@ function createHandle<Lng extends string>(
       .then(() => {
         initialized = true;
         detachEffects = bindLanguageEffects(plan, options);
-        if (options.seo) attachSeo(options.seo);
         if (options.onInit) options.onInit(i18n);
       })
       .catch((error: unknown) => {

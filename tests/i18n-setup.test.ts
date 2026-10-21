@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@umituz/web-seo", () => ({ initSEO: vi.fn() }));
-
 import { resetI18n, setupI18n } from "../src/integrations/i18n.setup";
 import { AlreadyInitializedError } from "../src/core/errors";
-import { initSEO } from "@umituz/web-seo";
 
 const baseResources = {
   en: { translation: { hello: "Hello" } },
@@ -65,18 +62,6 @@ describe("setupI18n", () => {
     });
     expect(() => setupI18n(different)).not.toThrow();
   });
-
-  it("invokes the SEO integrator when seo options are provided", async () => {
-    setupI18n(
-      options({
-        seo: { titleKey: "app.title", descriptionKey: "app.description" },
-      })
-    );
-    await Promise.resolve();
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(initSEO).toHaveBeenCalled();
-  });
 });
 
 describe("I18nHandle", () => {
@@ -118,10 +103,8 @@ describe("I18nHandle", () => {
   });
 
   it("guards operations before initialization completes", () => {
-
     resetI18n();
     const handle = setupI18n(options());
-
     handle.reset();
     expect(() => handle.addLanguage("de", {})).toThrow(/not initialized/i);
   });
