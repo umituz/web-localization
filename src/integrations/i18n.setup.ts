@@ -1,18 +1,26 @@
 import i18n from "i18next";
-import {
-  I18nCore,
-  type I18nInstance,
-  type I18nInitCallback,
-} from "./i18n-core";
-import {
-  I18nConfigBuilder,
-  computeConfigSignature,
-  type DetectionOptions,
-  type SeoIntegrationOptions,
-} from "./i18n-config";
+import { initReactI18next } from "react-i18next";
+import LanguageDetector from "i18next-browser-languagedetector";
+import { applyTextCase } from "../application/calculations/text-case-applier";
 import { AlreadyInitializedError } from "../core/errors";
+import { LOCALE } from "../core/constants";
 
-export type { DetectionOptions, SeoIntegrationOptions };
+export type I18nInstance = typeof i18n;
+export type I18nInitCallback = (instance: I18nInstance) => void;
+
+export interface DetectionOptions {
+  readonly order?: readonly string[];
+  readonly caches?: readonly string[];
+  readonly lookupLocalStorage?: string;
+  readonly lookupSessionStorage?: string;
+}
+
+export interface SeoIntegrationOptions {
+  readonly titleKey: string;
+  readonly descriptionKey: string;
+  readonly defaultImage?: string;
+  readonly twitterHandle?: string;
+}
 
 export interface SetupI18nOptions {
   readonly resources: Record<string, { translation: Record<string, unknown> }>;
@@ -40,95 +48,190 @@ export interface I18nHandle {
   readonly whenReady: () => Promise<I18nInstance>;
 }
 
-let globalCore: I18nCore | null = null;
+type InitOptions = Parameters<typeof i18n.init>[0];
 
-export function setupI18n(options: SetupI18nOptions): I18nHandle {
-  const incomingSignature = computeConfigSignature({
-    resources: options.resources,
-    defaultLng: options.defaultLng,
-    fallbackLng: options.fallbackLng,
-    detection: options.detection,
-    seo: options.seo,
-    lazyLoad: options.lazyLoad,
-    saveMissing: options.saveMissing,
-    reactUseSuspense: options.reactUseSuspense,
-  });
+const DETECTION_ORDER = ["localStorage", "navigator"] as const;
+const DETECTION_CACHES = ["localStorage"] as const;
 
-  if (globalCore) {
-    if (globalCore.signature !== incomingSignature) {
-      throw new AlreadyInitializedError(
-        `i18n (initialized with "${globalCore.signature}", called with "${incomingSignature}"). Call resetI18n() first to re-initialize.`
-      );
-    }
-    globalCore.initialize();
-    return buildHandle(globalCore);
+function configSignature(options: SetupI18nOptions): string {
+  const langs = Object.keys(options.resources).sort().join(",");
+  return `${options.defaultLng ?? LOCALE.DEFAULT_BASE_LANGUAGE}|${langs}`;
+}
+
+function buildInitOptions(options: SetupI18nOptions): InitOptions {
+  const {
+    resources,
+    defaultLng = LOCALE.DEFAULT_BASE_LANGUAGE,
+    fallbackLng = LOCALE.DEFAULT_BASE_LANGUAGE,
+    detection = {},
+    lazyLoad = false,
+    saveMissing = false,
+    reactUseSuspense = true,
+  } = options;
+
+  const bundled: Record<string, { translation: Record<string, unknown> }> = {};
+  for (const [lng, resource] of Object.entries(resources)) {
+    bundled[lng] = { translation: resource.translation ?? {} };
   }
 
-  const builder = new I18nConfigBuilder({
-    resources: options.resources,
-    defaultLng: options.defaultLng,
-    fallbackLng: options.fallbackLng,
-    detection: options.detection,
-    seo: options.seo,
-    lazyLoad: options.lazyLoad,
-    saveMissing: options.saveMissing,
-    reactUseSuspense: options.reactUseSuspense,
-  });
-
-  const core = new I18nCore(i18n, {
-    builder,
-    onInit: options.onInit,
-
-    seoIntegrator: (instance, seo) => {
-      void import("@umituz/web-seo")
-        .then(({ initSEO }) => initSEO({ i18n: instance, ...seo }))
-        .catch((error: unknown) => {
-          console.warn(
-            "[web-localization] SEO integration skipped — install @umituz/web-seo to enable it.",
-            error,
-          );
-        });
+  return {
+    resources: lazyLoad ? undefined : bundled,
+    lng: defaultLng,
+    fallbackLng,
+    load: lazyLoad ? "languageOnly" : "all",
+    preload: lazyLoad ? [] : undefined,
+    ...(lazyLoad
+      ? {}
+      : { supportedLngs: Object.keys(bundled), nonExplicitSupportedLngs: true }),
+    ns: ["translation"],
+    defaultNS: "translation",
+    saveMissing,
+    interpolation: {
+      escapeValue: false,
+      format: (value, format) => applyTextCase(value, format),
     },
-  });
+    detection: {
+      order: [...(detection.order ?? DETECTION_ORDER)],
+      caches: [...(detection.caches ?? DETECTION_CACHES)],
+      ...(detection.lookupLocalStorage
+        ? { lookupLocalStorage: detection.lookupLocalStorage }
+        : {}),
+      ...(detection.lookupSessionStorage
+        ? { lookupSessionStorage: detection.lookupSessionStorage }
+        : {}),
+    },
+    react: {
+      useSuspense: reactUseSuspense,
+      bindI18n: "languageChanged",
+      bindI18nStore: "added removed",
+      transEmptyNodeValue: "",
+      transSupportBasicHtmlNodes: true,
+      transKeepBasicHtmlNodesFor: ["br", "strong", "i", "p"],
+    },
+  };
+}
 
-  core.initialize();
+function bindDocumentLanguage(): () => void {
+  if (typeof document === "undefined") return () => undefined;
+  const initialLang = document.documentElement.lang;
+  const apply = () => {
+    document.documentElement.lang = i18n.resolvedLanguage || i18n.language;
+  };
+  apply();
+  i18n.on("languageChanged", apply);
+  return () => {
+    i18n.off("languageChanged", apply);
+    document.documentElement.lang = initialLang;
+  };
+}
 
-  globalCore = core;
-  return buildHandle(core);
+function attachSeo(seo: SeoIntegrationOptions): void {
+  void import("@umituz/web-seo")
+    .then(({ initSEO }) => initSEO({ i18n, ...seo }))
+    .catch((error: unknown) => {
+      console.warn(
+        "[web-localization] SEO integration skipped — install @umituz/web-seo to enable it.",
+        error,
+      );
+    });
+}
+
+let activeHandle: I18nHandle | null = null;
+let activeSignature: string | null = null;
+
+export function setupI18n(options: SetupI18nOptions): I18nHandle {
+  const signature = configSignature(options);
+
+  if (activeHandle && activeSignature !== signature) {
+    throw new AlreadyInitializedError(
+      `i18n (initialized with "${activeSignature}", called with "${signature}"). Call resetI18n() first to re-initialize.`
+    );
+  }
+
+  if (!activeHandle) {
+    activeHandle = createHandle(options, buildInitOptions(options));
+    activeSignature = signature;
+  }
+
+  void activeHandle.whenReady();
+  return activeHandle;
 }
 
 export function resetI18n(): void {
-  globalCore?.reset();
-  globalCore = null;
+  activeHandle?.reset();
+  activeHandle = null;
+  activeSignature = null;
 }
 
-function buildHandle(core: I18nCore): I18nHandle {
-  return {
-    instance: core.getInstance(),
+function createHandle(options: SetupI18nOptions, initOptions: InitOptions): I18nHandle {
+  let initialized = false;
+  let initializationPromise: Promise<void> | null = null;
+  let unbindDocumentLanguage: (() => void) | null = null;
+
+  const start = (): Promise<void> => {
+    if (initializationPromise) return initializationPromise;
+
+    initializationPromise = i18n
+      .use(LanguageDetector)
+      .use(initReactI18next)
+      .init(initOptions)
+      .then(() => {
+        initialized = true;
+        unbindDocumentLanguage = bindDocumentLanguage();
+        if (options.seo) attachSeo(options.seo);
+        if (options.onInit) options.onInit(i18n);
+      })
+      .catch((error: unknown) => {
+        initializationPromise = null;
+        throw error instanceof Error ? error : new Error(String(error));
+      });
+
+    return initializationPromise;
+  };
+
+  const assertInitialized = (): void => {
+    if (!initialized) {
+      throw new Error("i18n is not initialized yet. Call setupI18n first.");
+    }
+  };
+
+  const handle: I18nHandle = {
+    instance: i18n,
     addLanguage: (lng, resources, ns = "translation") => {
-      if (!core.isInitialized()) {
-        throw new Error("i18n is not initialized yet. Call setupI18n first.");
+      assertInitialized();
+      const supported = i18n.options.supportedLngs;
+      if (supported && !supported.includes(lng)) {
+        (supported as string[]).push(lng);
       }
-      const inst = core.getInstance();
-      const supported = inst.options.supportedLngs as string[] | undefined;
-      if (supported && !supported.includes(lng)) supported.push(lng);
-      inst.addResourceBundle(lng, ns, resources, true, true);
+      i18n.addResourceBundle(lng, ns, resources, true, true);
     },
     changeLanguage: async (lng) => {
-      if (!core.isInitialized()) {
-        throw new Error("i18n is not initialized yet. Call setupI18n first.");
-      }
-      await core.getInstance().changeLanguage(lng);
+      assertInitialized();
+      await i18n.changeLanguage(lng);
     },
-    getCurrentLanguage: () => {
-      const inst = core.getInstance();
-      return inst.resolvedLanguage || inst.language || inst.languages[0] || "en-US";
-    },
-    isInitialized: () => core.isInitialized(),
+    getCurrentLanguage: () =>
+      i18n.resolvedLanguage ||
+      i18n.language ||
+      i18n.languages[0] ||
+      LOCALE.DEFAULT_BASE_LANGUAGE,
+    isInitialized: () => initialized && i18n.isInitialized,
     reset: () => {
-      core.reset();
-      globalCore = null;
+      unbindDocumentLanguage?.();
+      unbindDocumentLanguage = null;
+      initialized = false;
+      initializationPromise = null;
+      if (i18n.isInitialized) {
+        for (const lng of [...i18n.languages]) {
+          i18n.removeResourceBundle(lng, "translation");
+        }
+      }
+      if (activeHandle === handle) {
+        activeHandle = null;
+        activeSignature = null;
+      }
     },
-    whenReady: () => core.whenReady(),
+    whenReady: () => start().then(() => i18n),
   };
+
+  return handle;
 }
