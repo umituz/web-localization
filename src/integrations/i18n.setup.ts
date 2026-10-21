@@ -94,6 +94,7 @@ function buildInitOptions<Lng extends string>(
     resources: lazyLoad ? undefined : bundled,
     lng: plan.initialLanguage,
     fallbackLng: plan.fallbackLanguage,
+    initImmediate: false,
     load: lazyLoad ? "languageOnly" : "all",
     preload: lazyLoad ? [] : undefined,
     ...(lazyLoad
