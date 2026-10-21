@@ -129,6 +129,7 @@ function buildInitOptions<Lng extends string>(
   }
 
   return {
+    ...({ showSupportNotice: false } as Record<string, unknown>),
     resources: lazyLoad ? undefined : bundled,
     lng: bootLanguage,
     fallbackLng: plan.fallbackLanguage,
