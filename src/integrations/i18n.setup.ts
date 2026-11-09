@@ -55,7 +55,7 @@ function planLanguages<Lng extends string>(
   options: SetupI18nOptions<Lng>
 ): LanguagePlan<Lng> {
   const languages = Object.keys(options.resources) as Lng[];
-  const fallbackLanguage = options.fallbackLanguage ?? languages[0];
+  const fallbackLanguage = options.fallbackLanguage ?? (languages[0] as Lng);
   return {
     languages,
     fallbackLanguage,
@@ -73,7 +73,7 @@ function matchLanguage<Lng extends string>(
 ): Lng | undefined {
   if (!candidate) return undefined;
   if (languages.includes(candidate as Lng)) return candidate as Lng;
-  const base = candidate.split("-")[0].toLowerCase();
+  const base = (candidate.split("-")[0] ?? candidate).toLowerCase();
   return languages.find((lng) => lng.toLowerCase() === base);
 }
 

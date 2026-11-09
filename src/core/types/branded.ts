@@ -16,7 +16,7 @@ export const LanguageCode = {
 
 export const Iso639Code = {
   fromLanguageCode(code: LanguageCode): Iso639Code {
-    const base = code.includes("-") ? code.split("-")[0] : code;
+    const base = code.includes("-") ? (code.split("-")[0] ?? code) : code;
     return base.toLowerCase() as Iso639Code;
   },
 } as const;

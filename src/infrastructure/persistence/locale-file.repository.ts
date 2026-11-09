@@ -313,7 +313,7 @@ class ObjectLiteralParser {
   private parseNumber(): number {
     const start = this.pos;
     if (this.peek() === "-") this.pos++;
-    while (this.pos < this.source.length && /[0-9.eE+-]/.test(this.source[this.pos])) {
+    while (this.pos < this.source.length && /[0-9.eE+-]/.test(this.source[this.pos] ?? "")) {
       this.pos++;
     }
     const numStr = this.source.slice(start, this.pos);
@@ -326,14 +326,14 @@ class ObjectLiteralParser {
 
   private parseIdentifier(): string {
     const start = this.pos;
-    while (this.pos < this.source.length && /[A-Za-z0-9_$]/.test(this.source[this.pos])) {
+    while (this.pos < this.source.length && /[A-Za-z0-9_$]/.test(this.source[this.pos] ?? "")) {
       this.pos++;
     }
     return this.source.slice(start, this.pos);
   }
 
   private skipWhitespace(): void {
-    while (this.pos < this.source.length && /\s/.test(this.source[this.pos])) {
+    while (this.pos < this.source.length && /\s/.test(this.source[this.pos] ?? "")) {
       this.pos++;
     }
     if (this.source.slice(this.pos, this.pos + 2) === "//") {

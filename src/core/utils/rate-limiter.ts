@@ -86,6 +86,7 @@ export class RateLimiter {
     let insertAt = this.queue.length;
     for (let i = 0; i < this.queue.length; i++) {
       const existing = this.queue[i];
+      if (!existing) continue;
       if (
         request.priority < existing.priority ||
         (request.priority === existing.priority && request.enqueuedAt < existing.enqueuedAt)
