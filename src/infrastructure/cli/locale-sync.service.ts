@@ -63,12 +63,14 @@ export class LocaleSyncService {
   async run(options: SyncCommandOptions): Promise<SyncResult> {
 
     const localesDir = path.resolve(this.repository.root, options.localesDir);
-    const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
+    const baseLangPath = this.repository.resolveLocalePath(options.localesDir, options.baseLang);
 
     let baseData = await this.repository.read(baseLangPath);
     if (baseData === null) {
       throw new LocaleFileNotFoundError(baseLangPath);
     }
+
+    const createdDomainFiles: string[] = [];
 
     let sourceScan: SourceScanSummary | undefined;
     if (options.srcDir) {
@@ -83,6 +85,7 @@ export class LocaleSyncService {
       });
       baseData = scanOutcome.baseData;
       sourceScan = scanOutcome.summary;
+      createdDomainFiles.push(...scanOutcome.createdFiles);
     }
 
     const locales = await this.repository.listLocales(localesDir);
@@ -114,7 +117,7 @@ export class LocaleSyncService {
     await Promise.all(
       targets.map((langCode) =>
         semaphore.run(async () => {
-          const targetPath = path.join(localesDir, `${langCode}.ts`);
+          const targetPath = this.repository.resolveLocalePath(options.localesDir, langCode);
           try {
             const targetData = (await this.repository.read(targetPath)) ?? {};
             const synced = syncObjectStructure(baseData, targetData);
@@ -129,7 +132,8 @@ export class LocaleSyncService {
 
             if (added > 0 || removed > 0) {
               if (!options.dryRun) {
-                await this.repository.write(targetPath, synced, langCode);
+                const outcome = await this.repository.write(targetPath, synced, langCode);
+                createdDomainFiles.push(...outcome.createdFiles);
               }
               this.reporter.success(
                 `${langCode}: +${added} keys, -${removed} keys${options.dryRun ? " (dry run, not saved)" : ""}.`
@@ -157,6 +161,12 @@ export class LocaleSyncService {
     const succeeded = results.filter((r) => r.success).length;
     const failed = results.length - succeeded;
 
+    if (createdDomainFiles.length > 0) {
+      this.reporter.warning(
+        `New domain files created — add an import + spread for each to the language's index.ts barrel:\n  ${createdDomainFiles.join("\n  ")}`
+      );
+    }
+
     return {
       languagesProcessed: results.length,
       languagesSucceeded: succeeded,
@@ -174,7 +184,11 @@ export class LocaleSyncService {
     baseLangPath: string;
     baseLang: string;
     baseData: Record<string, unknown>;
-  }): Promise<{ baseData: Record<string, unknown>; summary: SourceScanSummary }> {
+  }): Promise<{
+    baseData: Record<string, unknown>;
+    summary: SourceScanSummary;
+    createdFiles: readonly string[];
+  }> {
     const scanner = new SourceKeyScanner({
       projectRoot: this.repository.root,
       excludeAbsolutePaths: [params.localesDir],
@@ -227,8 +241,14 @@ export class LocaleSyncService {
 
     const baseFileUpdated =
       keysAddedToBase.length > 0 || keysPrunedFromBase.length > 0;
+    let createdFiles: readonly string[] = [];
     if (baseFileUpdated && !params.dryRun) {
-      await this.repository.write(params.baseLangPath, params.baseData, params.baseLang);
+      const outcome = await this.repository.write(
+        params.baseLangPath,
+        params.baseData,
+        params.baseLang
+      );
+      createdFiles = outcome.createdFiles;
     }
 
     return {
@@ -241,6 +261,7 @@ export class LocaleSyncService {
         keysPrunedFromBase,
         baseFileUpdated,
       },
+      createdFiles,
     };
   }
 }

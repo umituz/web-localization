@@ -111,6 +111,26 @@ export default {
 };
 ```
 
+**Directory layout** — apps that keep one folder per language with one file
+per domain (`src/locales/en/shell.ts`, `src/locales/en/catalog.ts`, …, plus
+an `index.ts` barrel per language) are supported transparently: `sync` and
+`translate` detect the layout automatically. Changed keys are written back
+into the domain file that owns them; untouched files stay byte-identical.
+Hand-authored TypeScript inside locale files is preserved on rewrite:
+
+- imports and local consts before the default export (e.g.
+  `import { BRAND } from '@/brand'`) are kept verbatim as a preamble,
+- values that are expressions (`tagline: BRAND.tagline.tr`) or carry type
+  assertions (`exampleTexts: {} as Record<string, string[]>`) round-trip
+  verbatim and are never machine-translated,
+- `` `${BRAND.name}` `` template interpolations are treated like `{{count}}`
+  placeholders during translation, so Google never mangles them.
+
+New top-level keys without a home domain become `<key>.ts` files; the CLI
+lists them so you can add the import to each language's `index.ts` barrel.
+`setup` still scaffolds the flat layout — the directory layout is for
+adopting an existing project.
+
 ```bash
 # Scaffold locale stubs and the index.ts barrel
 npx web-loc setup --locales-dir src/locales --languages tr-TR,de-DE
@@ -155,6 +175,10 @@ Source-scan notes:
   `@umituz/react-native-google-translate`.
 - `--prune` is opt-in and refuses to run when the scan finds zero keys, so a
   broken scan can never wipe your base file. Use `--dry-run` to preview.
+- Be careful with `--prune` when keys are resolved dynamically (DB ids,
+  variables): the scanner only sees literal usages, so data-driven keys look
+  unused. In directory layouts, expression values (`BRAND.tagline.tr`) are
+  also invisible to the scanner — leave pruning off there.
 
 ### 3. Translation service (library API)
 

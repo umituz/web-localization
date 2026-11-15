@@ -20,6 +20,12 @@ export { TextValidator } from "./application/services/text-validator";
 export { VariableProtector } from "./application/services/variable-protector";
 export { TranslationCache } from "./application/services/translation-cache";
 export { ObjectTreeWalker } from "./application/services/object-flattener";
+export {
+  opaqueExpression,
+  isOpaqueExpression,
+  opaqueExpressionSource,
+  isInterpolatedTemplate,
+} from "./application/services/opaque-expression";
 export { extractKeysFromContent } from "./application/services/source-key-extractor";
 export {
   setByDottedPath,
@@ -84,7 +90,9 @@ export {
   LocaleFileRepository,
   syncObjectStructure,
   serializeLocaleObject,
+  serializeTypeScriptLocale,
 } from "./infrastructure/persistence/locale-file.repository";
+export type { LocaleWriteOutcome } from "./infrastructure/persistence/locale-file.repository";
 
 export {
   LocalizationError,

@@ -24,12 +24,14 @@ export const LOCALE = {
   DEFAULT_LOCALES_DIR: "src/locales",
   DEFAULT_SOURCE_DIR: "src",
   LOCALE_FILE_PATTERN: /^[a-z]{2}(-[A-Z]{2})?\.ts$/,
+  LOCALE_DIR_PATTERN: /^[a-z]{2}(-[A-Z]{2})?$/,
 } as const;
 
 export const GOOGLE_TRANSLATE = {
   API_URL: "https://translate.googleapis.com/translate_a/single",
   BATCH_SIZE: 50,
   VARIABLE_PLACEHOLDER_PATTERN: /\{\{([^}]+)\}\}/g,
+  TEMPLATE_INTERPOLATION_PATTERN: /\$\{([^}]+)\}/g,
 } as const;
 
 export const UI = {

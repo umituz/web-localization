@@ -4,6 +4,7 @@ import type {
 } from "../../domain/entities/translation.entity";
 import { TranslationStats } from "../../domain/entities/translation.entity";
 import type { TranslationProgressHandler } from "../../domain/interfaces/translation-service.interface";
+import { isOpaqueExpression } from "./opaque-expression";
 
 interface LeafToTranslate {
   readonly key: string;
@@ -39,6 +40,8 @@ export class ObjectTreeWalker {
         }
 
         if (typeof srcValue !== "string") continue;
+        if (isOpaqueExpression(srcValue)) continue;
+        if (isOpaqueExpression(tgtValue)) continue;
 
         if (!force && !needsTranslation(tgtValue)) continue;
 

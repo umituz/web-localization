@@ -41,7 +41,7 @@ export class LocaleTranslateService {
   async run(options: TranslateCommandOptions): Promise<TranslateResult> {
 
     const localesDir = path.resolve(this.repository.root, options.localesDir);
-    const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
+    const baseLangPath = this.repository.resolveLocalePath(options.localesDir, options.baseLang);
 
     const baseData = await this.repository.read(baseLangPath);
     if (baseData === null) {
@@ -80,7 +80,7 @@ export class LocaleTranslateService {
     await Promise.all(
       targets.map((langCode) =>
         semaphore.run(async () => {
-          const targetPath = path.join(localesDir, `${langCode}.ts`);
+          const targetPath = this.repository.resolveLocalePath(options.localesDir, langCode);
           try {
             const targetData = (await this.repository.read(targetPath)) ?? {};
             const targetLang = this.extractIsoCode(langCode);

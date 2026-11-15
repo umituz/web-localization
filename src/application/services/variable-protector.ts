@@ -15,7 +15,17 @@ export class VariableProtector {
     const placeholders = new Map<string, string>();
     let counter = 0;
 
-    const safeText = text.replace(
+    let safeText = text.replace(
+      GOOGLE_TRANSLATE.TEMPLATE_INTERPOLATION_PATTERN,
+      (_match, inner) => {
+        const placeholder = buildVariablePlaceholder(counter);
+        placeholders.set(placeholder, `\${${inner}}`);
+        counter++;
+        return placeholder;
+      }
+    );
+
+    safeText = safeText.replace(
       GOOGLE_TRANSLATE.VARIABLE_PLACEHOLDER_PATTERN,
       (_match, inner) => {
         const placeholder = buildVariablePlaceholder(counter);
@@ -36,7 +46,7 @@ export class VariableProtector {
       const regex = buildFlexiblePlaceholderMatcher(
         this.extractCounter(placeholder)
       );
-      result = result.replace(regex, original);
+      result = result.replace(regex, () => original);
     }
     return result;
   }
