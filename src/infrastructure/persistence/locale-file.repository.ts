@@ -767,6 +767,26 @@ function deepEquals(a: unknown, b: unknown): boolean {
   return false;
 }
 
+const PLURAL_SUFFIX_PATTERN = /_(zero|one|two|few|many|other)$/;
+
+/**
+ * True when a target-only key is an i18next plural variant (`key_zero`,
+ * `key_two`, …) of a key family the base language also has. Languages differ
+ * in which plural categories they use (Arabic has six), so targets legitimately
+ * hold variants the base lacks — sync must keep them.
+ */
+export function isPluralVariantOfSource(
+  source: Record<string, unknown>,
+  key: string
+): boolean {
+  if (!PLURAL_SUFFIX_PATTERN.test(key)) return false;
+  const stem = key.replace(PLURAL_SUFFIX_PATTERN, "");
+  if (stem in source) return true;
+  return Object.keys(source).some(
+    (sourceKey) => sourceKey.startsWith(`${stem}_`) && PLURAL_SUFFIX_PATTERN.test(sourceKey)
+  );
+}
+
 export function syncObjectStructure(
   source: Record<string, unknown>,
   target: Record<string, unknown>
@@ -790,9 +810,9 @@ export function syncObjectStructure(
   }
 
   for (const key of Object.keys(result)) {
-    if (!(key in source)) {
-      delete result[key];
-    }
+    if (key in source) continue;
+    if (isPluralVariantOfSource(source, key)) continue;
+    delete result[key];
   }
 
   return result;

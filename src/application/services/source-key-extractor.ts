@@ -24,6 +24,7 @@ const IGNORED_LAYOUT_VALS = new Set([
   "capitalize", "uppercase", "lowercase", "solid", "dotted", "dashed", "wrap",
   "nowrap", "space-between", "space-around", "flex-start", "flex-end", "baseline",
   "react", "index", "default", "string", "number", "boolean", "key", "id",
+  "true", "false", "null", "undefined", "yes", "no",
 ]);
 
 /** t('key') / t("key") / t(`key`) — optionally with an options argument. */

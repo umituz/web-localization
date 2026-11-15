@@ -89,6 +89,7 @@ export type { SourceKeyScannerOptions } from "./infrastructure/scanning/source-k
 export {
   LocaleFileRepository,
   syncObjectStructure,
+  isPluralVariantOfSource,
   serializeLocaleObject,
   serializeTypeScriptLocale,
 } from "./infrastructure/persistence/locale-file.repository";

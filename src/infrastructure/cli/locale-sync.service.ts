@@ -2,7 +2,11 @@ import * as path from "path";
 import { Semaphore } from "../../core/utils/semaphore";
 import { LocaleFileNotFoundError } from "../../core/errors";
 import { RATE_LIMIT } from "../../core/constants";
-import { LocaleFileRepository, syncObjectStructure } from "../persistence/locale-file.repository";
+import {
+  LocaleFileRepository,
+  isPluralVariantOfSource,
+  syncObjectStructure,
+} from "../persistence/locale-file.repository";
 import { SourceKeyScanner } from "../scanning/source-key.scanner";
 import {
   flattenToDottedPaths,
@@ -289,7 +293,9 @@ function diffKeys(
       if (tv === undefined) added++;
     }
     for (const key of Object.keys(tgt)) {
-      if (!(key in src)) removed++;
+      if (key in src) continue;
+      if (isPluralVariantOfSource(src, key)) continue;
+      removed++;
     }
   };
 

@@ -67,6 +67,14 @@ describe("extractKeysFromContent", () => {
     expect([...keys.keys()]).toEqual(["tabs.home", "tabs.profile"]);
   });
 
+  it("ignores boolean literals leaked from jsx attributes", () => {
+    const keys = extractKeysFromContent(
+      `const kinds = ["lesson", "true", "false", "null"];
+       const label = t(\`search.kinds.\${kind}\`);`
+    );
+    expect([...keys.keys()]).toEqual(["search.kinds.lesson"]);
+  });
+
   it("does not match word-internal t( endings like object.at()", () => {
     const keys = extractKeysFromContent(`const x = object.at('something');`);
     expect(keys.size).toBe(0);

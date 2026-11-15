@@ -143,6 +143,37 @@ describe("LocaleSyncService", () => {
       service.run({ localesDir: "src/locales", baseLang: "xx-XX" })
     ).rejects.toThrow(LocaleFileNotFoundError);
   });
+
+  it("keeps i18next plural variants the base language lacks", async () => {
+    writeLocale(
+      "en-US.ts",
+      `export default { post: { count_one: "One post", count_other: "{{count}} posts" } };`
+    );
+    writeLocale(
+      "ar.ts",
+      `export default { post: { count_zero: "لا توجد منشورات", count_one: "منشور واحد", count_two: "منشوران", count_many: "منشورات", count_other: "{{count}} منشور" } };`
+    );
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({ localesDir: "src/locales", baseLang: "en-US" });
+
+    expect(result.results[0]).toMatchObject({ language: "ar", keysAdded: 0, keysRemoved: 0 });
+    const written = readFileSync(join(projectRoot, "src/locales/ar.ts"), "utf-8");
+    expect(written).toContain("count_zero:");
+    expect(written).toContain("count_two:");
+    expect(written).toContain("count_many:");
+  });
+
+  it("still removes target keys unrelated to any base plural family", async () => {
+    writeLocale("en-US.ts", `export default { post: { title: "Post" } };`);
+    writeLocale("tr-TR.ts", `export default { post: { title: "Gönderi", legacy_one: "x" } };`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({ localesDir: "src/locales", baseLang: "en-US" });
+
+    expect(result.results[0]).toMatchObject({ language: "tr-TR", keysRemoved: 1 });
+    expect(readLocaleObject("tr-TR.ts")).toEqual({ post: { title: "Gönderi" } });
+  });
 });
 
 describe("LocaleSyncService — source scan", () => {
