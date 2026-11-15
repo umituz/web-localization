@@ -75,6 +75,31 @@ describe("extractKeysFromContent", () => {
     expect([...keys.keys()]).toEqual(["search.kinds.lesson"]);
   });
 
+  it("expands against the named array only, not every array in the file", () => {
+    const keys = extractKeysFromContent(
+      `const levels = ["casual", "formal"];
+       const vibes = ["standard", "anime", "poetic"];
+       const label = t(\`ai.translate.honorifics.\${level}\`);`
+    );
+    expect([...keys.keys()]).toEqual([
+      "ai.translate.honorifics.casual",
+      "ai.translate.honorifics.formal",
+    ]);
+  });
+
+  it("skips expansion when no array matches the interpolated name", () => {
+    const keys = extractKeysFromContent(
+      `const NAV_ITEMS = [{ key: "home" }, { key: "lessons" }];
+       const label = t(\`nav.items.\${item.key}\`);`
+    );
+    expect(keys.size).toBe(0);
+  });
+
+  it("ignores single-letter segments in dot-notation", () => {
+    const keys = extractKeysFromContent(`const demo = 'a.b.c';`);
+    expect(keys.size).toBe(0);
+  });
+
   it("does not match word-internal t( endings like object.at()", () => {
     const keys = extractKeysFromContent(`const x = object.at('something');`);
     expect(keys.size).toBe(0);

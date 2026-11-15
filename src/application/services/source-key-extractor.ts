@@ -31,19 +31,19 @@ const IGNORED_LAYOUT_VALS = new Set([
 const T_CALL_PATTERN = /(?:^|\W)t\(\s*['"`]([^'"`]+)['"`]\s*(?:,[^()]*)?\)/g;
 
 /** Dot-notation literals with at least two dots (reduces false positives). */
-const DOT_NOTATION_PATTERN = /['"`]([a-z][a-z0-9_]*\.(?:[a-z0-9_]+\.)+[a-z0-9_]+)['"`]/gi;
+const DOT_NOTATION_PATTERN = /['"`]([a-z][a-z0-9_]*\.(?:[a-z0-9_]{2,}\.)+[a-z0-9_]{2,})['"`]/gi;
 
-/** Template literals: t(`prefix.${…}`) — prefix captured before the interpolation. */
-const TEMPLATE_PREFIX_PATTERN = /t\(`([a-z0-9_.]+)\.\$\{/g;
-
-/** Array literal contents (non-greedy) used to expand template prefixes. */
-const ARRAY_LITERAL_PATTERN = /\[([\s\S]*?)\]/g;
+/** Template literals: t(`prefix.${expr}`) — prefix and interpolation captured. */
+const TEMPLATE_PREFIX_PATTERN = /t\(`([a-z0-9_.]+)\.\$\{([^}`]+)\}`/g;
 
 /** Quoted identifiers inside array literals. */
 const ARRAY_ITEM_PATTERN = /['"`]([a-z0-9_]{2,40})['"`]/g;
 
 /** Purely numeric array items — never meaningful key suffixes. */
 const PURE_NUMBER_PATTERN = /^[0-9]+$/;
+
+/** Last identifier segment of an interpolation expression (`v.id` → `id`). */
+const LAST_IDENTIFIER_PATTERN = /[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export type UsedKeyMap = ReadonlyMap<string, string>;
 
@@ -95,30 +95,43 @@ function collectTemplateLiteralKeys(content: string, keyMap: Map<string, string>
   while ((match = TEMPLATE_PREFIX_PATTERN.exec(content)) !== null) {
     const prefix = match[1];
     if (!prefix) continue;
-    expandPrefixAgainstArrays(content, prefix, keyMap);
+    expandPrefixAgainstNamedArray(content, prefix, match[2] ?? "", keyMap);
   }
 }
 
-function expandPrefixAgainstArrays(
+/**
+ * Expands a template prefix only against the array literal the interpolated
+ * variable plausibly comes from — `const tabs = [...]` for `${tab}`,
+ * `const itemKeys = [...]` for `${item.key}`. Expanding against every array
+ * in the file cross-contaminates unrelated option lists into the key set.
+ */
+function expandPrefixAgainstNamedArray(
   content: string,
   prefix: string,
+  expression: string,
   keyMap: Map<string, string>
 ): void {
-  ARRAY_LITERAL_PATTERN.lastIndex = 0;
-  let arrayMatch: RegExpExecArray | null;
-  while ((arrayMatch = ARRAY_LITERAL_PATTERN.exec(content)) !== null) {
-    const inner = arrayMatch[1];
-    if (!inner) continue;
+  const identifierMatch = LAST_IDENTIFIER_PATTERN.exec(expression);
+  const identifier = identifierMatch?.[0];
+  if (!identifier) return;
+
+  for (const candidate of [identifier, `${identifier}s`]) {
+    const declaration = new RegExp(
+      `(?:const|let|var)\\s+${candidate}\\s*=\\s*\\[([^\\]]*)\\]`,
+      "i"
+    ).exec(content);
+    if (!declaration || !declaration[1]) continue;
 
     ARRAY_ITEM_PATTERN.lastIndex = 0;
     let itemMatch: RegExpExecArray | null;
-    while ((itemMatch = ARRAY_ITEM_PATTERN.exec(inner)) !== null) {
+    while ((itemMatch = ARRAY_ITEM_PATTERN.exec(declaration[1])) !== null) {
       const id = itemMatch[1];
       if (!id) continue;
       if (IGNORED_LAYOUT_VALS.has(id.toLowerCase())) continue;
       if (PURE_NUMBER_PATTERN.test(id)) continue;
       addKey(keyMap, `${prefix}.${id}`);
     }
+    return;
   }
 }
 

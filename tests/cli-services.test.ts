@@ -259,6 +259,38 @@ describe("LocaleSyncService — source scan", () => {
       service.run({ localesDir: "src/locales", baseLang: "en-US", srcDir: "no-such-dir" })
     ).rejects.toThrow(SourceDirectoryNotFoundError);
   });
+
+  it("treats a used key as present when only its plural leaves exist", async () => {
+    writeLocale("en-US.ts", `export default { quota: { left_one: "1 left", left_other: "{{count}} left" } };`);
+    writeSource("src/app.tsx", `const s = t("quota.left", { count: 3 });`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+    });
+
+    expect(result.sourceScan?.keysAddedToBase).toEqual([]);
+    expect(result.sourceScan?.unusedKeys).toEqual([]);
+  });
+
+  it("keeps plural leaves alive when pruning with a stem-referencing key", async () => {
+    writeLocale("en-US.ts", `export default { quota: { left_one: "1 left", left_other: "{{count}} left" } };`);
+    writeSource("src/app.tsx", `const s = t("quota.left", { count: 3 });`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+      prune: true,
+    });
+
+    expect(result.sourceScan?.keysPrunedFromBase).toEqual([]);
+    expect(readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8"))
+      .toContain(`left_one: "1 left"`);
+  });
 });
 
 describe("LocaleTranslateService", () => {

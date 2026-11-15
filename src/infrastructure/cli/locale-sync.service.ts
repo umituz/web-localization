@@ -17,6 +17,18 @@ import type { ProgressReporter } from "./progress-reporter";
 
 const MAX_REPORTED_KEYS = 10;
 
+const PLURAL_SATISFACTION_SUFFIXES = ["zero", "one", "two", "few", "many", "other"] as const;
+const PLURAL_LEAF_PATTERN = /_(zero|one|two|few|many|other)$/;
+
+function hasPluralSibling(leaves: ReadonlyMap<string, unknown>, dottedPath: string): boolean {
+  return PLURAL_SATISFACTION_SUFFIXES.some((suffix) => leaves.has(`${dottedPath}_${suffix}`));
+}
+
+function pluralLeafStem(leafPath: string): string | null {
+  const match = PLURAL_LEAF_PATTERN.exec(leafPath);
+  return match ? leafPath.slice(0, leafPath.length - match[0].length) : null;
+}
+
 export interface SyncCommandOptions {
   readonly localesDir: string;
   readonly baseLang: string;
@@ -209,7 +221,7 @@ export class LocaleSyncService {
     // so `web-loc translate` never invents source copy — humans fill the base.
     const keysAddedToBase: string[] = [];
     for (const dottedPath of usedKeys.keys()) {
-      if (leaves.has(dottedPath)) continue;
+      if (leaves.has(dottedPath) || hasPluralSibling(leaves, dottedPath)) continue;
       if (setByDottedPath(params.baseData, dottedPath, "")) {
         keysAddedToBase.push(dottedPath);
       }
@@ -220,8 +232,16 @@ export class LocaleSyncService {
       );
     }
 
-    // Base keys never referenced by code.
-    const unusedKeys = [...leaves.keys()].filter((p) => !usedKeys.has(p)).sort();
+    // Base keys never referenced by code. i18next resolves `key` to
+    // `key_zero`/`key_one`/… at runtime, so plural leaves count as used when
+    // their stem is referenced.
+    const unusedKeys = [...leaves.keys()]
+      .filter((p) => !usedKeys.has(p))
+      .filter((p) => {
+        const stem = pluralLeafStem(p);
+        return stem === null || !usedKeys.has(stem);
+      })
+      .sort();
 
     let keysPrunedFromBase: string[] = [];
     if (params.prune) {
@@ -230,7 +250,14 @@ export class LocaleSyncService {
           "Source scan found 0 keys — pruning skipped to protect the base file."
         );
       } else if (unusedKeys.length > 0) {
-        const pruneResult = pruneToPaths(params.baseData, new Set(usedKeys.keys()));
+        const allowedPaths = new Set(usedKeys.keys());
+        for (const leaf of leaves.keys()) {
+          const stem = pluralLeafStem(leaf);
+          if (stem !== null && usedKeys.has(stem)) {
+            allowedPaths.add(leaf);
+          }
+        }
+        const pruneResult = pruneToPaths(params.baseData, allowedPaths);
         params.baseData = pruneResult.pruned;
         keysPrunedFromBase = [...pruneResult.removedPaths].sort();
         this.reporter.success(
