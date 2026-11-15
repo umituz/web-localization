@@ -18,8 +18,10 @@ auto-fills missing translations via Google Translate.
 - **Auto-translation** — `web-loc translate` fills empty keys using Google
   Translate, with `{{placeholder}}` protection, caching, rate limiting,
   bounded concurrency, retries with exponential backoff, and AbortSignal support.
-  Texts are packed into batched requests (multiple `q` params per call, capped
-  by count and URL length) with automatic fallback to individual requests.
+  Texts are packed into batched requests (multiple `q` params per call on the
+  multi-text endpoint, capped by count and URL length); items the batch
+  response omits are refetched individually, and a failed chunk falls back to
+  individual requests.
   Values Google echoes back unchanged, brand words, and letterless values are
   copied verbatim instead of being counted as failures.
 - **Runtime hooks** — `useTranslation` / `useBatchTranslation` translate

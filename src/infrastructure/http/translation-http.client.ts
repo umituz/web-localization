@@ -66,19 +66,47 @@ export class GoogleTranslateHttpClient {
 
     const protectedTexts = texts.map((text) => this.protector.protect(text));
     const url = buildGoogleTranslateBatchUrl({
-      apiBaseUrl: this.options.apiUrl ?? GOOGLE_TRANSLATE.API_URL,
+      apiBaseUrl: this.options.apiUrl ?? GOOGLE_TRANSLATE.API_BATCH_URL,
       texts: protectedTexts.map((entry) => entry.safeText),
       sourceLanguage: sourceLang,
       targetLanguage: targetLang,
     });
 
     const data = await this.requestJson(url, signal);
-    return protectedTexts.map((entry, index) => {
-      const segments = Array.isArray(data) && Array.isArray(data[index]) ? data[index] : [];
+    if (!Array.isArray(data)) {
+      throw new TranslationHttpError(
+        0,
+        "Translation API returned a malformed batch response"
+      );
+    }
+
+    const results: string[] = [];
+    for (let index = 0; index < protectedTexts.length; index++) {
+      const entry = protectedTexts[index];
+      const item = data[index];
+      if (!entry) {
+        throw new TranslationHttpError(
+          0,
+          "Translation batch state is inconsistent"
+        );
+      }
+
       const translatedSafe =
-        segments.length > 0 ? mergeTranslationSegments(segments) : entry.safeText;
-      return this.protector.restore(translatedSafe, entry.placeholders);
-    });
+        typeof item === "string" && item.length > 0
+          ? item
+          : Array.isArray(item) && item.length > 0
+            ? mergeTranslationSegments(item)
+            : null;
+
+      if (translatedSafe === null) {
+        results.push(
+          await this.translate(texts[index] ?? entry.safeText, sourceLang, targetLang, signal)
+        );
+        continue;
+      }
+      results.push(this.protector.restore(translatedSafe, entry.placeholders));
+    }
+    return results;
   }
 
   private async requestJson(url: string, signal?: AbortSignal): Promise<unknown> {

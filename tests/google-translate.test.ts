@@ -16,13 +16,10 @@ function googleResponse(translated: string): Response {
 }
 
 function googleBatchResponse(translations: string[]): Response {
-  return new Response(
-    JSON.stringify(translations.map((t) => [[t, "source", null, null]])),
-    {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }
-  );
+  return new Response(JSON.stringify(translations), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function batchAwareEchoFetch(transform: (text: string) => string) {
@@ -163,6 +160,7 @@ describe("GoogleTranslateStrategy.translateBatch", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain("translate_a/t");
     expect(calledUrl.match(/q=/g)?.length).toBe(3);
     expect(stats.successCount).toBe(3);
   });
@@ -186,8 +184,12 @@ describe("GoogleTranslateStrategy.translateBatch", () => {
     expect(strategy.getCacheStats().size).toBe(0);
   });
 
-  it("pads missing batch items with the original text", async () => {
-    const fetchImpl = vi.fn(async () => googleBatchResponse(["merhaba"]));
+  it("refetches missing batch items through the single-text endpoint", async () => {
+    const fetchImpl = vi.fn(async (url: unknown) => {
+      const texts = new URL(String(url)).searchParams.getAll("q");
+      if (texts.length > 1) return googleBatchResponse(["merhaba"]);
+      return googleResponse("merhaba dünya");
+    });
     const strategy = makeStrategy(fetchImpl as unknown as typeof fetch);
 
     const stats = await strategy.translateBatch([
@@ -195,8 +197,11 @@ describe("GoogleTranslateStrategy.translateBatch", () => {
       { text: "world", targetLanguage: "tr" as never },
     ]);
 
-    expect(stats.successCount).toBe(1);
-    expect(stats.skippedCount).toBe(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("translate_a/single");
+    expect(stats.successCount).toBe(2);
+    expect(stats.skippedCount).toBe(0);
+    expect(stats.failureCount).toBe(0);
   });
 
   it("passes brand words through without calling fetch", async () => {

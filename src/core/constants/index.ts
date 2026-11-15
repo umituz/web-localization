@@ -31,6 +31,7 @@ export const LOCALE = {
 
 export const GOOGLE_TRANSLATE = {
   API_URL: "https://translate.googleapis.com/translate_a/single",
+  API_BATCH_URL: "https://translate.googleapis.com/translate_a/t",
   BATCH_SIZE: 50,
   VARIABLE_PLACEHOLDER_PATTERN: /\{\{([^}]+)\}\}/g,
   TEMPLATE_INTERPOLATION_PATTERN: /\$\{([^}]+)\}/g,
