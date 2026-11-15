@@ -121,3 +121,37 @@ function needsTranslation(targetValue: unknown): boolean {
   if (typeof targetValue !== "string") return true;
   return targetValue.length === 0;
 }
+
+/**
+ * Copies letterless source leaves (password masks, symbols) into missing or
+ * empty target slots. Returns how many were copied so callers can decide
+ * whether the target file still needs writing.
+ */
+export function copyInvariantLeaves(
+  source: Record<string, unknown>,
+  target: Record<string, unknown>
+): number {
+  let copied = 0;
+
+  const walk = (src: Record<string, unknown>, tgt: Record<string, unknown>) => {
+    for (const key of Object.keys(src)) {
+      const srcValue = src[key];
+      if (isPlainObject(srcValue)) {
+        const nextTarget = isPlainObject(tgt[key]) ? (tgt[key] as Record<string, unknown>) : {};
+        if (!isPlainObject(tgt[key])) {
+          tgt[key] = nextTarget;
+        }
+        walk(srcValue as Record<string, unknown>, nextTarget);
+        continue;
+      }
+      if (typeof srcValue !== "string") continue;
+      if (hasLetter(srcValue)) continue;
+      if (!needsTranslation(tgt[key])) continue;
+      tgt[key] = srcValue;
+      copied++;
+    }
+  };
+
+  walk(source, target);
+  return copied;
+}

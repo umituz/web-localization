@@ -8,6 +8,7 @@ import type { ITranslationStrategy } from "../../domain/interfaces/translation-s
 import type { Iso639Code } from "../../core/types/branded";
 import type { ProgressReporter } from "./progress-reporter";
 import { extractIso639Code } from "../../application/calculations/iso-language-code-extractor";
+import { copyInvariantLeaves } from "../../application/services/object-flattener";
 
 export interface TranslateCommandOptions {
   readonly localesDir: string;
@@ -85,6 +86,8 @@ export class LocaleTranslateService {
             const targetData = (await this.repository.read(targetPath)) ?? {};
             const targetLang = this.extractIsoCode(langCode);
 
+            const invariantCopied = copyInvariantLeaves(baseData, targetData);
+
             const stats = await this.strategy.translateObject(
               {
                 source: baseData,
@@ -99,10 +102,12 @@ export class LocaleTranslateService {
             );
 
             const translatedHere = Math.min(stats.successCount, options.maxKeys ?? Infinity);
-            if (translatedHere > 0) {
+            if (translatedHere > 0 || invariantCopied > 0) {
               if (!options.dryRun) {
                 await this.repository.write(targetPath, targetData, langCode);
               }
+            }
+            if (translatedHere > 0) {
               this.reporter.success(
                 `${langCode}: translated ${stats.successCount} keys${options.dryRun ? " (dry run, not saved)" : ""}.`
               );
@@ -110,6 +115,10 @@ export class LocaleTranslateService {
             } else if (stats.failureCount > 0) {
               this.reporter.warning(`${langCode}: ${stats.failureCount} keys failed.`);
               totalFailed += stats.failureCount;
+            } else if (invariantCopied > 0) {
+              this.reporter.info(
+                `${langCode}: copied ${invariantCopied} locale-invariant values${options.dryRun ? " (dry run, not saved)" : ""}.`
+              );
             } else {
               this.reporter.info(`${langCode}: already up to date.`);
             }

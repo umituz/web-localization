@@ -349,6 +349,21 @@ describe("LocaleTranslateService", () => {
     expect(written).not.toContain("••••••••!");
   });
 
+  it("writes the file when only locale-invariant values changed", async () => {
+    writeLocale("en-US.ts", `export default { mask: "••••••••" };`);
+    writeLocale("tr-TR.ts", `export default { mask: "" };`);
+    const { strategy } = makeEchoStrategy();
+    const service = new LocaleTranslateService(repository, strategy, reporter);
+
+    const result = await service.run({ localesDir: "src/locales", baseLang: "en-US" });
+
+    expect(result.totalKeysTranslated).toBe(0);
+    expect(result.totalKeysFailed).toBe(0);
+    const written = readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8");
+    expect(written).toContain("••••••••");
+    expect(written).not.toContain("••••••••!");
+  });
+
   it("dry-run performs no writes", async () => {
     writeLocale("tr-TR.ts", `export default { nav: { home: "" } };`);
     const before = readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8");
