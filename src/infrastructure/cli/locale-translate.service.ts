@@ -14,12 +14,17 @@ export interface TranslateCommandOptions {
   readonly localesDir: string;
   readonly baseLang: string;
   readonly force?: boolean;
+  readonly refreshIdentical?: boolean;
   readonly concurrency?: number;
   readonly languages?: readonly string[];
   readonly dryRun?: boolean;
   readonly maxKeys?: number;
+  readonly verbose?: boolean;
+  readonly syncFirst?: boolean;
   readonly abortSignal?: AbortSignal;
 }
+
+const VERBOSE_KEYS_PER_LANGUAGE = 15;
 
 export interface TranslateResult {
   readonly languagesProcessed: number;
@@ -68,9 +73,15 @@ export class LocaleTranslateService {
 
     const semaphore = new Semaphore(options.concurrency ?? RATE_LIMIT.DEFAULT_CONCURRENCY);
     const emitter = new ProgressEmitter();
-    emitter.on("keyTranslated", () => {
-
-    });
+    if (options.verbose) {
+      const loggedPerLanguage = new Map<string, number>();
+      emitter.on("keyTranslated", (event) => {
+        const seen = loggedPerLanguage.get(event.language) ?? 0;
+        if (seen >= VERBOSE_KEYS_PER_LANGUAGE) return;
+        loggedPerLanguage.set(event.language, seen + 1);
+        this.reporter.info(`  ${event.path}: ${event.from} → ${event.to}`);
+      });
+    }
 
     let succeeded = 0;
     let failed = 0;
@@ -94,15 +105,16 @@ export class LocaleTranslateService {
                 target: targetData,
                 targetLanguage: targetLang,
                 force: options.force,
+                refreshIdentical: options.refreshIdentical,
               },
               {
                 signal: options.abortSignal,
-                emitter: new NullProgressEmitter(),
+                emitter: options.verbose ? emitter : new NullProgressEmitter(),
               }
             );
 
             const translatedHere = Math.min(stats.successCount, options.maxKeys ?? Infinity);
-            if (translatedHere > 0 || invariantCopied > 0) {
+            if (translatedHere > 0 || invariantCopied > 0 || stats.skippedCount > 0) {
               if (!options.dryRun) {
                 await this.repository.write(targetPath, targetData, langCode);
               }
@@ -118,6 +130,10 @@ export class LocaleTranslateService {
             } else if (invariantCopied > 0) {
               this.reporter.info(
                 `${langCode}: copied ${invariantCopied} locale-invariant values${options.dryRun ? " (dry run, not saved)" : ""}.`
+              );
+            } else if (stats.skippedCount > 0) {
+              this.reporter.info(
+                `${langCode}: ${stats.skippedCount} keys need no translation (kept verbatim).`
               );
             } else {
               this.reporter.info(`${langCode}: already up to date.`);

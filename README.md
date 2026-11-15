@@ -18,6 +18,13 @@ auto-fills missing translations via Google Translate.
 - **Auto-translation** — `web-loc translate` fills empty keys using Google
   Translate, with `{{placeholder}}` protection, caching, rate limiting,
   bounded concurrency, retries with exponential backoff, and AbortSignal support.
+  Texts are packed into batched requests (multiple `q` params per call, capped
+  by count and URL length) with automatic fallback to individual requests.
+  Values Google echoes back unchanged, brand words, and letterless values are
+  copied verbatim instead of being counted as failures.
+- **Runtime hooks** — `useTranslation` / `useBatchTranslation` translate
+  dynamic (non-catalog) strings at runtime through the same cached, rate-limited
+  service the CLI uses.
 - **Typed errors** — every failure is a `LocalizationError` subclass with a
   stable `code`.
 - **Pluggable strategies** — `ITranslationStrategy` lets you swap in DeepL or
@@ -153,7 +160,11 @@ npx web-loc translate --locales-dir src/locales --base-lang en-US --dry-run
 ```
 
 Common options: `--languages tr-TR,de-DE` (subset), `--concurrency 10`,
-`--force` (re-translate), `--max-keys 200` (cap per language).
+`--force` (re-translate), `--max-keys 200` (cap per language),
+`--sync-first` (structural sync before translating), `--refresh-identical`
+(re-translate multi-word values that still equal the base language, and values
+carrying stale `{{placeholders}}` the base no longer has), `--verbose` (log the
+first translated keys per language).
 
 #### The full workflow
 
@@ -197,6 +208,20 @@ console.log(response.translatedText); // "Merhaba Dünya"
 
 The strategy uses Google's **free public endpoint** — no API key, subject to
 its rate limits. The `apiKey` config field is deprecated and ignored.
+
+For dynamic (non-catalog) strings in React components, use the runtime hooks:
+
+```ts
+import { useTranslation } from "@umituz/web-localization/react";
+
+const { translate, isLoading, error } = useTranslation();
+const result = await translate("Today's trending topic", "tr");
+```
+
+`useBatchTranslation` wraps `translateBatch` / `translateObject` with
+`isLoading`, live `progress` / `total`, and `onSuccess` / `onError` /
+`onProgress` callbacks. Both hooks share the singleton strategy, so CLI and
+runtime hits the same cache and rate limiter.
 
 ## Platform compatibility
 

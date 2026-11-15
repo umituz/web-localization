@@ -28,7 +28,8 @@ export class TranslationStats {
     public readonly successCount: number,
     public readonly failureCount: number,
     public readonly skippedCount: number,
-    public readonly translatedKeys: readonly TranslationItem[]
+    public readonly translatedKeys: readonly TranslationItem[],
+    public readonly skippedKeys: readonly TranslationItem[] = []
   ) {
     if (totalCount < 0 || successCount < 0 || failureCount < 0 || skippedCount < 0) {
       throw new Error("TranslationStats counts cannot be negative");
@@ -49,7 +50,8 @@ export class TranslationStats {
       this.successCount + 1,
       this.failureCount,
       this.skippedCount,
-      [...this.translatedKeys, item]
+      [...this.translatedKeys, item],
+      this.skippedKeys
     );
   }
 
@@ -59,17 +61,19 @@ export class TranslationStats {
       this.successCount,
       this.failureCount + 1,
       this.skippedCount,
-      this.translatedKeys
+      this.translatedKeys,
+      this.skippedKeys
     );
   }
 
-  withSkip(): TranslationStats {
+  withSkip(item?: TranslationItem): TranslationStats {
     return new TranslationStats(
       this.totalCount,
       this.successCount,
       this.failureCount,
       this.skippedCount + 1,
-      this.translatedKeys
+      this.translatedKeys,
+      item ? [...this.skippedKeys, item] : this.skippedKeys
     );
   }
 
@@ -79,7 +83,8 @@ export class TranslationStats {
       this.successCount + other.successCount,
       this.failureCount + other.failureCount,
       this.skippedCount + other.skippedCount,
-      [...this.translatedKeys, ...other.translatedKeys]
+      [...this.translatedKeys, ...other.translatedKeys],
+      [...this.skippedKeys, ...other.skippedKeys]
     );
   }
 

@@ -1,4 +1,14 @@
 export const DEFAULT_SKIP_LIST: readonly string[] = ["@umituz"];
+export const EXACT_SKIP_WORDS: readonly string[] = [
+  "Google",
+  "Apple",
+  "Facebook",
+  "Instagram",
+  "Twitter",
+  "YouTube",
+  "WhatsApp",
+];
+const EXACT_SKIP_SET = new Set(EXACT_SKIP_WORDS);
 const PURE_NUMBER_PATTERN = /^\d+$/;
 
 export interface TextEligibility {
@@ -30,11 +40,13 @@ function checkIsTranslatable(value: unknown): boolean {
 }
 
 function checkShouldSkip(value: unknown, skipList: readonly string[]): boolean {
-  if (typeof value !== "string" || skipList.length === 0) return false;
-  for (const word of skipList) {
-    if (value.includes(word)) return true;
+  if (typeof value !== "string") return false;
+  if (skipList.length > 0) {
+    for (const word of skipList) {
+      if (value.includes(word)) return true;
+    }
   }
-  return false;
+  return EXACT_SKIP_SET.has(value.trim());
 }
 
 function checkNeedsTranslation(targetValue: unknown): boolean {

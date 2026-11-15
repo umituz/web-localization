@@ -29,6 +29,17 @@ import { calculateElapsedMs } from "../calculations/time-elapsed-calculator";
 
 const DEFAULT_SOURCE_LANG: Iso639Code = "en" as Iso639Code;
 
+interface BatchItem {
+  readonly index: number;
+  readonly request: TranslationRequest;
+}
+
+interface BatchChunk {
+  readonly items: readonly BatchItem[];
+  readonly source: Iso639Code;
+  readonly target: Iso639Code;
+}
+
 export interface GoogleTranslateStrategyOptions extends TranslationServiceConfig {
   readonly maxConcurrent?: number;
   readonly fetchImpl?: typeof fetch;
@@ -132,7 +143,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
       throwIfAborted(signal);
 
       if (!this.validator.isTranslatable(req.text) || this.validator.shouldSkip(req.text)) {
-        stats = stats.withSkip();
+        stats = stats.withSkip({ key: req.text, from: req.text, to: req.text });
         continue;
       }
 
@@ -157,35 +168,51 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
       return stats;
     }
 
-    const fetched = await Promise.allSettled(
-      uncached.map((req) => this.fetchOneWithLimits(req, signal))
+    const outcomes = new Array<string | undefined>(uncached.length);
+    const chunks = this.buildBatchChunks(uncached);
+
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        try {
+          const translated = await this.fetchChunkWithLimits(chunk, signal);
+          for (let i = 0; i < chunk.items.length; i++) {
+            const item = chunk.items[i];
+            if (item) outcomes[item.index] = translated[i];
+          }
+        } catch (error) {
+          if (error instanceof TranslationAbortedError) throw error;
+          for (const item of chunk.items) {
+            try {
+              outcomes[item.index] = await this.fetchOneWithLimits(item.request, signal);
+            } catch {
+              outcomes[item.index] = undefined;
+            }
+          }
+        }
+      })
     );
 
     for (let i = 0; i < uncached.length; i++) {
       throwIfAborted(signal);
 
       const req = uncached[i];
-      const result = fetched[i];
-      if (!req || !result) continue;
+      if (!req) continue;
+      const translated = outcomes[i];
+      const source = req.sourceLanguage ?? DEFAULT_SOURCE_LANG;
 
-      if (result.status === "fulfilled" && result.value && result.value !== req.text) {
-        const source = req.sourceLanguage ?? DEFAULT_SOURCE_LANG;
-        this.cache.set(
-          { source, target: req.targetLanguage, text: req.text },
-          result.value
-        );
-        const item: TranslationItem = { key: req.text, from: req.text, to: result.value };
+      if (typeof translated === "string" && translated !== req.text) {
+        this.cache.set({ source, target: req.targetLanguage, text: req.text }, translated);
+        const item: TranslationItem = { key: req.text, from: req.text, to: translated };
         stats = stats.withSuccess(item);
         emitter.emit({
           type: "keyTranslated",
           language: req.targetLanguage as string,
           path: req.text,
           from: req.text,
-          to: result.value,
+          to: translated,
         });
-      } else if (result.status === "rejected") {
-        if (result.reason instanceof TranslationAbortedError) throw result.reason;
-        stats = stats.withFailure();
+      } else if (typeof translated === "string") {
+        stats = stats.withSkip({ key: req.text, from: req.text, to: req.text });
       } else {
         stats = stats.withFailure();
       }
@@ -198,11 +225,25 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     context: ObjectTranslationContext,
     options: { signal?: AbortSignal; emitter?: ProgressEmitter } = {}
   ): Promise<TranslationStats> {
-    const { source, target, targetLanguage, force = false, onProgress } = context;
+    const {
+      source,
+      target,
+      targetLanguage,
+      force = false,
+      refreshIdentical = false,
+      onProgress,
+    } = context;
     const emitter = options.emitter ?? new NullProgressEmitter();
 
     throwIfAborted(options.signal);
-    const leaves = this.walker.collectLeaves(source, target, "", targetLanguage, force);
+    const leaves = this.walker.collectLeaves(
+      source,
+      target,
+      "",
+      targetLanguage,
+      force,
+      refreshIdentical
+    );
 
     emitter.emit({
       type: "languageStart",
@@ -231,6 +272,11 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     const translationMap = new Map<string, string>();
     for (const item of translationStats.translatedKeys) {
       translationMap.set(item.from, item.to);
+    }
+    for (const item of translationStats.skippedKeys) {
+      if (!translationMap.has(item.from)) {
+        translationMap.set(item.from, item.to);
+      }
     }
 
     const applied = this.walker.applyTranslations(
@@ -263,6 +309,84 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
   dispose(): void {
     this.cache.clear();
     this.rateLimiter.clear();
+  }
+
+  private buildBatchChunks(requests: readonly TranslationRequest[]): BatchChunk[] {
+    interface ChunkGroup {
+      readonly source: Iso639Code;
+      readonly target: Iso639Code;
+      readonly items: BatchItem[];
+    }
+
+    const groups = new Map<string, ChunkGroup>();
+    requests.forEach((request, index) => {
+      const source = request.sourceLanguage ?? DEFAULT_SOURCE_LANG;
+      const groupKey = `${source}::${request.targetLanguage}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.items.push({ index, request });
+      } else {
+        groups.set(groupKey, {
+          source,
+          target: request.targetLanguage,
+          items: [{ index, request }],
+        });
+      }
+    });
+
+    const chunks: BatchChunk[] = [];
+    for (const group of groups.values()) {
+      let current: BatchItem[] = [];
+      let encodedLength = 0;
+      const flush = () => {
+        if (current.length > 0) {
+          chunks.push({ items: current, source: group.source, target: group.target });
+          current = [];
+          encodedLength = 0;
+        }
+      };
+      for (const item of group.items) {
+        const itemLength = encodeURIComponent(item.request.text).length + 3;
+        if (
+          current.length >= HTTP.BATCH_MAX_TEXTS ||
+          (current.length > 0 && encodedLength + itemLength > HTTP.BATCH_MAX_ENCODED_LENGTH)
+        ) {
+          flush();
+        }
+        current.push(item);
+        encodedLength += itemLength;
+      }
+      flush();
+    }
+
+    return chunks;
+  }
+
+  private async fetchChunkWithLimits(
+    chunk: BatchChunk,
+    signal?: AbortSignal
+  ): Promise<string[]> {
+    return this.semaphore.run(async () => {
+      throwIfAborted(signal);
+      await this.rateLimiter.waitForSlot();
+      const startTime = Date.now();
+      try {
+        const result = await this.retryPolicy.execute(
+          () =>
+            this.httpClient.translateBatch(
+              chunk.items.map((item) => item.request.text),
+              chunk.source,
+              chunk.target,
+              signal
+            ),
+          signal
+        );
+        this.rateLimiter.recordResponseTime(calculateElapsedMs(startTime));
+        return result;
+      } catch (error) {
+        throw error instanceof Error ? error : new Error(String(error));
+      }
+    });
   }
 
   private async fetchOneWithLimits(

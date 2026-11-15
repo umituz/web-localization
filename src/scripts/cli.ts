@@ -111,6 +111,13 @@ program
   )
   .option("--dry-run", "Show what would change without writing files", false)
   .option("--max-keys <n>", "Maximum keys to translate per language (cap)")
+  .option("--sync-first", "Run a structural sync before translating", false)
+  .option(
+    "--refresh-identical",
+    "Retranslate multi-word values that are identical to the base language",
+    false
+  )
+  .option("--verbose", "Log the first translated keys per language", false)
   .action(
     async (opts: {
       localesDir: string;
@@ -120,6 +127,9 @@ program
       languages?: string;
       dryRun: boolean;
       maxKeys?: string;
+      syncFirst: boolean;
+      refreshIdentical: boolean;
+      verbose: boolean;
     }) => {
       try {
         await cliService.translate({
@@ -130,6 +140,9 @@ program
           languages: parseList(opts.languages),
           dryRun: opts.dryRun,
           ...(opts.maxKeys ? { maxKeys: parsePositiveInt(opts.maxKeys, 0) } : {}),
+          syncFirst: opts.syncFirst,
+          refreshIdentical: opts.refreshIdentical,
+          verbose: opts.verbose,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

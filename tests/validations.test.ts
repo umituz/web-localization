@@ -57,6 +57,13 @@ describe("evaluateTextEligibility", () => {
     expect(evaluateTextEligibility({ value: "hello", skipList: [] }).shouldSkip).toBe(false);
   });
 
+  it("skips exact brand words but not sentences containing them", () => {
+    expect(evaluateTextEligibility({ value: "Google" }).shouldSkip).toBe(true);
+    expect(evaluateTextEligibility({ value: " YouTube " }).shouldSkip).toBe(true);
+    expect(evaluateTextEligibility({ value: "Sign in with Google" }).shouldSkip).toBe(false);
+    expect(evaluateTextEligibility({ value: "google" }).shouldSkip).toBe(false);
+  });
+
   it("needs translation only when the target is missing or empty", () => {
     expect(evaluateTextEligibility({ value: "x", targetValue: undefined }).needsTranslation).toBe(true);
     expect(evaluateTextEligibility({ value: "x", targetValue: "" }).needsTranslation).toBe(true);

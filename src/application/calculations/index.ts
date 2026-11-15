@@ -19,6 +19,12 @@ export {
   isWithinTtl,
   isTtlExpired,
 } from "./time-elapsed-calculator";
-export { buildGoogleTranslateUrl } from "./google-translate-url-builder";
-export type { GoogleTranslateUrlInput } from "./google-translate-url-builder";
+export {
+  buildGoogleTranslateUrl,
+  buildGoogleTranslateBatchUrl,
+} from "./google-translate-url-builder";
+export type {
+  GoogleTranslateUrlInput,
+  GoogleTranslateBatchUrlInput,
+} from "./google-translate-url-builder";
 export { extractIso639Code, extractLocaleCodeFromFilename } from "./iso-language-code-extractor";

@@ -53,6 +53,15 @@ class CLIService {
   }
 
   async translate(options: TranslateOptions): Promise<void> {
+    if (options.syncFirst) {
+      const syncService = new LocaleSyncService(this.repository, this.reporter);
+      await syncService.run({
+        localesDir: options.localesDir,
+        baseLang: options.baseLang,
+        concurrency: options.concurrency,
+        dryRun: options.dryRun,
+      });
+    }
     const service = new LocaleTranslateService(
       this.repository,
       googleTranslateService,

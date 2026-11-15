@@ -50,6 +50,7 @@ export {
   isWithinTtl,
   isTtlExpired,
   buildGoogleTranslateUrl,
+  buildGoogleTranslateBatchUrl,
   extractIso639Code,
   extractLocaleCodeFromFilename,
 } from "./application/calculations";
@@ -59,11 +60,14 @@ export type {
   RateLimitDelayInput,
   DynamicDelayInput,
   GoogleTranslateUrlInput,
+  GoogleTranslateBatchUrlInput,
 } from "./application/calculations";
 
 export {
   assertPathWithinProjectRoot,
   evaluateTextEligibility,
+  DEFAULT_SKIP_LIST,
+  EXACT_SKIP_WORDS,
   isRetryableHttpStatus,
   isNetworkLevelFailure,
   assertFileSizeWithinBound,

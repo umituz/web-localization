@@ -3,6 +3,7 @@ export type { PathTraversalCheckInput } from "./path-traversal-guard";
 export {
   evaluateTextEligibility,
   DEFAULT_SKIP_LIST,
+  EXACT_SKIP_WORDS,
 } from "./translation-text-eligibility";
 export type {
   TextEligibility,

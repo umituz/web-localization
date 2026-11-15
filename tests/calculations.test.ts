@@ -3,6 +3,7 @@ import {
   applyTextCase,
   buildFlexiblePlaceholderMatcher,
   buildGoogleTranslateUrl,
+  buildGoogleTranslateBatchUrl,
   buildStrictPlaceholderMatcher,
   buildVariablePlaceholder,
   computeExponentialBackoff,
@@ -54,6 +55,20 @@ describe("buildGoogleTranslateUrl", () => {
     expect(url).toContain("tl=tr");
     expect(url).toContain("dt=t");
     expect(new URL(url).searchParams.get("q")).toBe("Hello World");
+  });
+});
+
+describe("buildGoogleTranslateBatchUrl", () => {
+  it("appends every text as its own q parameter", () => {
+    const url = buildGoogleTranslateBatchUrl({
+      apiBaseUrl: "https://translate.googleapis.com/translate_a/single",
+      texts: ["Hello World", "Save & exit"],
+      sourceLanguage: "en",
+      targetLanguage: "tr",
+    });
+    expect(url).toContain("sl=en");
+    expect(url).toContain("tl=tr");
+    expect(new URL(url).searchParams.getAll("q")).toEqual(["Hello World", "Save & exit"]);
   });
 });
 

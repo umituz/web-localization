@@ -26,7 +26,8 @@ export class ObjectTreeWalker {
     target: Record<string, unknown>,
     pathPrefix: string,
     targetLanguage: Iso639Code,
-    force: boolean
+    force: boolean,
+    refreshIdentical = false
   ): LeafToTranslate[] {
     const leaves: LeafToTranslate[] = [];
     void targetLanguage;
@@ -57,7 +58,9 @@ export class ObjectTreeWalker {
           continue;
         }
 
-        if (!force && !needsTranslation(tgtValue)) continue;
+        if (!force && !needsTranslation(tgtValue)) {
+          if (!refreshIdentical || !shouldRefreshIdentical(srcValue, tgtValue)) continue;
+        }
 
         leaves.push({ key, path: currentPath, text: srcValue });
       }
@@ -78,12 +81,19 @@ export class ObjectTreeWalker {
 
     for (const leaf of leaves) {
       const translated = translations.get(leaf.text);
-      if (translated && translated !== leaf.text) {
+      if (translated !== undefined && translated !== leaf.text) {
         const parent = resolveParentNode(target, leaf.path);
         parent[leaf.key] = translated;
         const item: TranslationItem = { key: leaf.path, from: leaf.text, to: translated };
         updated = updated.withSuccess(item);
         if (onProgress) onProgress(leaf.path, leaf.text, translated);
+      } else if (translated !== undefined) {
+        updated = updated.withSkip();
+        const parent = resolveParentNode(target, leaf.path);
+        const existing = parent[leaf.key];
+        if (existing !== leaf.text && (existing === undefined || existing === "")) {
+          parent[leaf.key] = leaf.text;
+        }
       } else {
         updated = updated.withFailure();
       }
@@ -120,6 +130,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function needsTranslation(targetValue: unknown): boolean {
   if (typeof targetValue !== "string") return true;
   return targetValue.length === 0;
+}
+
+function shouldRefreshIdentical(sourceText: string, targetValue: unknown): boolean {
+  if (typeof targetValue !== "string") return false;
+  if (targetValue === sourceText) {
+    const isSingleWord = !sourceText.includes(" ") && sourceText.length < 20;
+    return !isSingleWord;
+  }
+  return (
+    targetValue.includes("{{") &&
+    targetValue.includes("}}") &&
+    !sourceText.includes("{{")
+  );
 }
 
 /**

@@ -23,6 +23,7 @@ export interface ObjectTranslationContext {
   readonly target: Record<string, unknown>;
   readonly targetLanguage: Iso639Code;
   readonly force?: boolean;
+  readonly refreshIdentical?: boolean;
   readonly onProgress?: TranslationProgressHandler;
 }
 
