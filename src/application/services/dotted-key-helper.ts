@@ -14,8 +14,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Sets `value` at the dotted `path`, creating intermediate objects as needed.
- * Returns false when an existing non-object node conflicts with the path
- * (e.g. "nav" is a string but "nav.home" is requested).
+ * Returns false when an existing node conflicts with the path: a non-object
+ * intermediate ("nav" is a string but "nav.home" is requested) or an existing
+ * object subtree at the final segment (a scalar must never clobber it).
  */
 export function setByDottedPath(
   target: Record<string, unknown>,
@@ -47,8 +48,8 @@ export function setByDottedPath(
   const last = segments[segments.length - 1];
   if (last === undefined) return false;
   const existing = node[last];
-  if (isPlainObject(existing) && isPlainObject(value)) {
-    return true; // Keep the richer existing subtree.
+  if (isPlainObject(existing)) {
+    return false; // Keep the richer existing subtree.
   }
   node[last] = value;
   return true;

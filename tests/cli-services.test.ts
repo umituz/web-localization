@@ -260,6 +260,30 @@ describe("LocaleSyncService — source scan", () => {
     ).rejects.toThrow(SourceDirectoryNotFoundError);
   });
 
+  it("never clobbers an object subtree a scan key points at", async () => {
+    writeLocale(
+      "en-US.ts",
+      `export default { admin: { templates: { t1: { label: "Label", reason: "Reason" } } } };`
+    );
+    writeSource(
+      "src/app.tsx",
+      `const ids = ["t1"];\nconst label = t(\`admin.templates.\${id}\`);`
+    );
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+    });
+
+    expect(result.sourceScan?.keysAddedToBase).toEqual([]);
+    expect(readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8"))
+      .toContain(`label: "Label"`);
+    expect(readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8"))
+      .toContain(`reason: "Reason"`);
+  });
+
   it("treats a used key as present when only its plural leaves exist", async () => {
     writeLocale("en-US.ts", `export default { quota: { left_one: "1 left", left_other: "{{count}} left" } };`);
     writeSource("src/app.tsx", `const s = t("quota.left", { count: 3 });`);
