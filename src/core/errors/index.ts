@@ -8,6 +8,7 @@ export {
   TranslationValidationError,
   TranslationTimeoutError,
   TranslationAbortedError,
+  TranslationCircuitOpenError,
   InvalidConfigError,
   AlreadyInitializedError,
   SourceDirectoryNotFoundError,

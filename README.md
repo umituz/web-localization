@@ -168,6 +168,20 @@ Common options: `--languages tr-TR,de-DE` (subset), `--concurrency 10`,
 carrying stale `{{placeholders}}` the base no longer has), `--verbose` (log the
 first translated keys per language).
 
+#### Endpoint, API key and the circuit breaker
+
+By default `translate` uses the free unofficial Google endpoint, which
+IP-throttles under volume (HTTP 429). Two protections apply:
+
+- **Circuit breaker** — after 8 consecutive terminal request failures the run
+  aborts fast with a clear message instead of grinding through every remaining
+  key for hours against a throttling endpoint. Any successful request resets
+  the streak.
+- **Official API** — set the `GOOGLE_TRANSLATE_API_KEY` environment variable
+  to route every request through the official Cloud Translation v2 endpoint
+  (`POST /language/translate/v2`, key in `x-goog-api-key`, up to 128 texts per
+  request). Key quota replaces IP throttling as the failure mode.
+
 #### The full workflow
 
 ```bash

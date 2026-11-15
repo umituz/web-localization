@@ -15,6 +15,17 @@ export const RATE_LIMIT = {
   DYNAMIC_DELAY_CAP_MULTIPLIER: 3,
 } as const;
 
+/**
+ * Circuit breaker: when the translation endpoint persistently refuses us
+ * (typical: the unofficial Google endpoint IP-throttles with HTTP 429),
+ * retrying every remaining key for hours is worse than useless. After this
+ * many CONSECUTIVE terminal request failures the run aborts fast with a
+ * clear message instead of grinding through the whole queue.
+ */
+export const CIRCUIT = {
+  DEFAULT_FAILURE_THRESHOLD: 8,
+} as const;
+
 export const CACHE = {
   TRANSLATION_MAX_SIZE: 1_000,
   TRANSLATION_TTL_MS: 60 * 60 * 1_000,
@@ -33,6 +44,10 @@ export const GOOGLE_TRANSLATE = {
   API_URL: "https://translate.googleapis.com/translate_a/single",
   API_BATCH_URL: "https://translate.googleapis.com/translate_a/t",
   BATCH_SIZE: 50,
+  /** Official Cloud Translation v2 endpoint (requires an API key). */
+  API_V2_URL: "https://translation.googleapis.com/language/translate/v2",
+  /** v2 accepts up to 128 text segments per request. */
+  API_V2_MAX_TEXTS: 128,
   VARIABLE_PLACEHOLDER_PATTERN: /\{\{([^}]+)\}\}/g,
   TEMPLATE_INTERPOLATION_PATTERN: /\$\{([^}]+)\}/g,
 } as const;

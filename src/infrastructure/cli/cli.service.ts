@@ -53,6 +53,11 @@ class CLIService {
   }
 
   async translate(options: TranslateOptions): Promise<void> {
+    if (process.env.GOOGLE_TRANSLATE_API_KEY) {
+      this.reporter.info(
+        "GOOGLE_TRANSLATE_API_KEY detected — using the official Cloud Translation API (key-quota, no IP throttling)."
+      );
+    }
     if (options.syncFirst) {
       const syncService = new LocaleSyncService(this.repository, this.reporter);
       await syncService.run({
@@ -79,6 +84,11 @@ class CLIService {
     this.reporter.data(
       `Cache:        ${result.cacheSize}/${result.cacheMaxSize} entries`
     );
+    if (result.totalKeysTranslated === 0 && result.totalKeysFailed > 0) {
+      this.reporter.warning(
+        "No keys were translated. If the endpoint kept returning HTTP 429, wait a few minutes and retry — or set GOOGLE_TRANSLATE_API_KEY to use the official API."
+      );
+    }
     if (options.dryRun) this.reporter.warning("Dry run — no files were modified.");
 
     googleTranslateService.dispose();

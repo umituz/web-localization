@@ -86,6 +86,23 @@ export class TranslationAbortedError extends LocalizationError {
   }
 }
 
+/**
+ * The translation endpoint refused too many consecutive requests (typically
+ * HTTP 429 IP throttling on the unofficial endpoint). The strategy opens its
+ * circuit and every further call fails immediately — retrying the whole key
+ * queue against a throttling endpoint would take hours and produce nothing.
+ */
+export class TranslationCircuitOpenError extends LocalizationError {
+  readonly code = "TRANSLATION_CIRCUIT_OPEN";
+  constructor(failures: number, lastErrorNote?: string) {
+    super(
+      `Translation API refused ${failures} consecutive requests${
+        lastErrorNote ? ` (last: ${lastErrorNote})` : ""
+      }. The endpoint is rate-limiting this client — stop and retry later, or set GOOGLE_TRANSLATE_API_KEY to use the official API.`
+    );
+  }
+}
+
 export class InvalidConfigError extends LocalizationError {
   readonly code = "INVALID_CONFIG";
   constructor(

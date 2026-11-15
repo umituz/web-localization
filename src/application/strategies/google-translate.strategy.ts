@@ -9,7 +9,7 @@ import {
   type TranslationResponse,
   TranslationStats,
 } from "../../domain/entities/translation.entity";
-import { HTTP, RATE_LIMIT } from "../../core/constants";
+import { HTTP, RATE_LIMIT, CIRCUIT } from "../../core/constants";
 import {
   Semaphore,
   RetryPolicy,
@@ -18,7 +18,11 @@ import {
   NullProgressEmitter,
   throwIfAborted,
 } from "../../core/utils";
-import { TranslationHttpError, TranslationAbortedError } from "../../core/errors";
+import {
+  TranslationHttpError,
+  TranslationAbortedError,
+  TranslationCircuitOpenError,
+} from "../../core/errors";
 import type { Iso639Code } from "../../core/types/branded";
 import { TranslationCache } from "../services/translation-cache";
 import { VariableProtector } from "../services/variable-protector";
@@ -43,6 +47,13 @@ interface BatchChunk {
 export interface GoogleTranslateStrategyOptions extends TranslationServiceConfig {
   readonly maxConcurrent?: number;
   readonly fetchImpl?: typeof fetch;
+  /** Google Cloud Translation API key — switches to the official v2 endpoint. */
+  readonly apiKey?: string;
+  /**
+   * Consecutive terminal request failures tolerated before the circuit
+   * opens and the whole run aborts fast. Default: CIRCUIT.DEFAULT_FAILURE_THRESHOLD.
+   */
+  readonly circuitFailureThreshold?: number;
 }
 
 export class GoogleTranslateStrategy implements ITranslationStrategy {
@@ -57,12 +68,19 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
   private readonly httpClient: GoogleTranslateHttpClient;
   private readonly semaphore: Semaphore;
   private readonly maxConcurrent: number;
+  private readonly circuitFailureThreshold: number;
+
+  private circuitOpen = false;
+  private consecutiveTerminalFailures = 0;
+  private lastErrorNote: string | undefined;
 
   constructor(options: GoogleTranslateStrategyOptions = {}) {
     const minDelay = options.minDelayMs ?? RATE_LIMIT.DEFAULT_MIN_DELAY_MS;
     const timeout = options.timeoutMs ?? HTTP.DEFAULT_TIMEOUT_MS;
     const maxRetries = options.maxRetries ?? HTTP.DEFAULT_MAX_RETRIES;
     this.maxConcurrent = options.maxConcurrent ?? RATE_LIMIT.DEFAULT_CONCURRENCY;
+    this.circuitFailureThreshold =
+      options.circuitFailureThreshold ?? CIRCUIT.DEFAULT_FAILURE_THRESHOLD;
 
     this.rateLimiter = new RateLimiter({ minDelayMs: minDelay });
     this.retryPolicy = new RetryPolicy({
@@ -74,6 +92,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     this.httpClient = new GoogleTranslateHttpClient(this.protector, {
       timeoutMs: timeout,
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
     });
     this.semaphore = new Semaphore(this.maxConcurrent);
   }
@@ -83,6 +102,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     signal?: AbortSignal
   ): Promise<TranslationResponse> {
     throwIfAborted(signal);
+    this.throwIfCircuitOpen();
 
     const source = request.sourceLanguage ?? DEFAULT_SOURCE_LANG;
     const cacheKey = { source, target: request.targetLanguage, text: request.text };
@@ -107,6 +127,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
       const translated = await this.fetchOneWithLimits(request, signal);
       throwIfAborted(signal);
       this.cache.set(cacheKey, translated);
+      this.consecutiveTerminalFailures = 0;
       return {
         originalText: request.text,
         translatedText: translated,
@@ -116,6 +137,8 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
       };
     } catch (error) {
       if (error instanceof TranslationAbortedError) throw error;
+      if (error instanceof TranslationCircuitOpenError) throw error;
+      this.lastErrorNote = error instanceof Error ? error.message : String(error);
       return {
         originalText: request.text,
         translatedText: request.text,
@@ -135,6 +158,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     if (requests.length === 0) {
       return TranslationStats.empty();
     }
+    this.throwIfCircuitOpen();
 
     let stats = TranslationStats.initial(requests.length);
 
@@ -181,6 +205,7 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
           }
         } catch (error) {
           if (error instanceof TranslationAbortedError) throw error;
+          this.lastErrorNote = error instanceof Error ? error.message : String(error);
           for (const item of chunk.items) {
             try {
               outcomes[item.index] = await this.fetchOneWithLimits(item.request, signal);
@@ -192,6 +217,8 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
       })
     );
 
+    let failuresThisBatch = 0;
+    let successesThisBatch = 0;
     for (let i = 0; i < uncached.length; i++) {
       throwIfAborted(signal);
 
@@ -211,12 +238,17 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
           from: req.text,
           to: translated,
         });
+        successesThisBatch++;
       } else if (typeof translated === "string") {
         stats = stats.withSkip({ key: req.text, from: req.text, to: req.text });
       } else {
         stats = stats.withFailure();
+        failuresThisBatch++;
       }
     }
+
+    this.recordTerminalOutcomes(successesThisBatch, failuresThisBatch);
+    this.throwIfCircuitOpen();
 
     return stats;
   }
@@ -302,6 +334,15 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
     return this.cache.stats();
   }
 
+  /** Circuit state — exposed for tests and long-lived embedders. */
+  get circuitState(): { open: boolean; consecutiveFailures: number; lastErrorNote?: string } {
+    return {
+      open: this.circuitOpen,
+      consecutiveFailures: this.consecutiveTerminalFailures,
+      ...(this.lastErrorNote !== undefined ? { lastErrorNote: this.lastErrorNote } : {}),
+    };
+  }
+
   clearCache(): void {
     this.cache.clear();
   }
@@ -309,6 +350,36 @@ export class GoogleTranslateStrategy implements ITranslationStrategy {
   dispose(): void {
     this.cache.clear();
     this.rateLimiter.clear();
+    this.circuitOpen = false;
+    this.consecutiveTerminalFailures = 0;
+    this.lastErrorNote = undefined;
+  }
+
+  /**
+   * Circuit bookkeeping after a batch: any success resets the streak (the
+   * endpoint is healthy again); terminal failures accumulate it. Reaching
+   * the threshold opens the circuit — the caller fails fast instead of
+   * queueing hours of doomed retries against a throttling endpoint.
+   */
+  private recordTerminalOutcomes(successes: number, failures: number): void {
+    if (successes > 0) {
+      this.consecutiveTerminalFailures = 0;
+    }
+    if (failures > 0) {
+      this.consecutiveTerminalFailures += failures;
+    }
+    if (this.consecutiveTerminalFailures >= this.circuitFailureThreshold) {
+      this.circuitOpen = true;
+    }
+  }
+
+  private throwIfCircuitOpen(): void {
+    if (this.circuitOpen) {
+      throw new TranslationCircuitOpenError(
+        this.consecutiveTerminalFailures,
+        this.lastErrorNote
+      );
+    }
   }
 
   private buildBatchChunks(requests: readonly TranslationRequest[]): BatchChunk[] {

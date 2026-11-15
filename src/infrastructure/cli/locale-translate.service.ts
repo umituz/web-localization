@@ -1,6 +1,7 @@
 import * as path from "path";
 import { Semaphore } from "../../core/utils/semaphore";
-import { LocaleFileNotFoundError } from "../../core/errors";
+import { LocaleFileNotFoundError, TranslationAbortedError } from "../../core/errors";
+import { TranslationCircuitOpenError } from "../../core/errors";
 import { RATE_LIMIT } from "../../core/constants";
 import { ProgressEmitter, NullProgressEmitter } from "../../core/utils";
 import { LocaleFileRepository } from "../persistence/locale-file.repository";
@@ -83,6 +84,17 @@ export class LocaleTranslateService {
       });
     }
 
+    // One shared abort controller: a tripped circuit breaker (endpoint
+    // persistently refusing us, e.g. HTTP 429 IP throttling) fails the
+    // whole run fast instead of letting every remaining language queue
+    // hours of doomed retries.
+    const controller = new AbortController();
+    if (options.abortSignal) {
+      if (options.abortSignal.aborted) controller.abort();
+      else options.abortSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    let circuitTripped = false;
+
     let succeeded = 0;
     let failed = 0;
     let totalTranslated = 0;
@@ -108,7 +120,7 @@ export class LocaleTranslateService {
                 refreshIdentical: options.refreshIdentical,
               },
               {
-                signal: options.abortSignal,
+                signal: controller.signal,
                 emitter: options.verbose ? emitter : new NullProgressEmitter(),
               }
             );
@@ -141,6 +153,23 @@ export class LocaleTranslateService {
             totalSkipped += stats.skippedCount;
             succeeded++;
           } catch (error) {
+            if (error instanceof TranslationCircuitOpenError) {
+              circuitTripped = true;
+              controller.abort();
+              failed++;
+              this.reporter.error(`${langCode}: ${error.message}`);
+              this.reporter.error(
+                "Stopping all remaining languages — the translation endpoint is rate-limiting this client. Retry later or set GOOGLE_TRANSLATE_API_KEY to use the official API."
+              );
+              return;
+            }
+            if (error instanceof TranslationAbortedError && controller.signal.aborted) {
+              failed++;
+              this.reporter.warning(
+                `${langCode}: skipped (${circuitTripped ? "endpoint rate limit" : "aborted"}).`
+              );
+              return;
+            }
             failed++;
             const message = error instanceof Error ? error.message : String(error);
             this.reporter.error(`${langCode}: ${message}`);
@@ -148,6 +177,12 @@ export class LocaleTranslateService {
         })
       )
     );
+
+    if (circuitTripped) {
+      this.reporter.warning(
+        "Run aborted early by the circuit breaker — some languages were not translated."
+      );
+    }
 
     const cacheStats = this.strategy.getCacheStats();
     return {
