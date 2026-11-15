@@ -29,6 +29,12 @@ export const DEFAULT_SCAN_SKIP_DIRS: readonly string[] = [
 
 const DEFAULT_SCAN_EXTENSIONS = /\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/;
 
+/** Test and spec files exercise fixture keys, never the shipped catalog. */
+const TEST_FILE_PATTERN = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/** The tool itself ships no consumer catalog — its doc examples are noise. */
+const SKIPPED_UMITUZ_PACKAGES = new Set(["web-localization"]);
+
 export interface SourceKeyScannerOptions {
   readonly projectRoot: string;
   /** Directory names never descended into. */
@@ -72,7 +78,11 @@ export class SourceKeyScanner {
     if (this.includeUmituzPackages) {
       const umituzPackagesDir = path.join(this.projectRoot, "node_modules", "@umituz");
       if (fs.existsSync(umituzPackagesDir)) {
-        this.walkDirectory(umituzPackagesDir, keyMap);
+        for (const entry of fs.readdirSync(umituzPackagesDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          if (SKIPPED_UMITUZ_PACKAGES.has(entry.name)) continue;
+          this.walkDirectory(path.join(umituzPackagesDir, entry.name), keyMap);
+        }
       }
     }
 
@@ -92,6 +102,7 @@ export class SourceKeyScanner {
       }
 
       if (!entry.isFile()) continue;
+      if (TEST_FILE_PATTERN.test(entry.name)) continue;
       if (!this.filePattern.test(entry.name)) continue;
       if (this.isExcluded(fullPath)) continue;
 

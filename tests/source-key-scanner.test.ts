@@ -153,6 +153,34 @@ describe("SourceKeyScanner", () => {
     expect([...keys.keys()].sort()).toEqual(["ds.button.save", "nav.home"]);
   });
 
+  it("skips the web-localization package under node_modules", () => {
+    writeProjectFile("src/app.tsx", `t("nav.home");`);
+    writeProjectFile(
+      "node_modules/@umituz/web-localization/src/application/services/helper.ts",
+      `// example: paths ("nav.header.login"), t('key')`
+    );
+
+    const scanner = new SourceKeyScanner({ projectRoot });
+    const keys = scanner.scan("src");
+
+    expect([...keys.keys()]).toEqual(["nav.home"]);
+  });
+
+  it("skips test and spec files in app source and packages", () => {
+    writeProjectFile("src/app.tsx", `t("nav.home");`);
+    writeProjectFile("src/app.test.ts", `t("test.only.key");`);
+    writeProjectFile("src/util.spec.tsx", `t("spec.only.key");`);
+    writeProjectFile(
+      "node_modules/@umituz/web-dashboard/src/domains/permissions/hasPermission.test.ts",
+      `expect(hasPermission(MATRIX, "owner", "anything.at.all")).toBe(true);`
+    );
+
+    const scanner = new SourceKeyScanner({ projectRoot });
+    const keys = scanner.scan("src");
+
+    expect([...keys.keys()]).toEqual(["nav.home"]);
+  });
+
   it("throws typed SourceDirectoryNotFoundError for a missing source dir", () => {
     const scanner = new SourceKeyScanner({ projectRoot, includeUmituzPackages: false });
     expect(() => scanner.scan("does-not-exist")).toThrow(SourceDirectoryNotFoundError);
