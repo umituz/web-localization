@@ -332,6 +332,23 @@ describe("LocaleTranslateService", () => {
     expect(written).toContain("Ana Sayfa");
   });
 
+  it("copies letterless mask values verbatim instead of translating them", async () => {
+    writeLocale(
+      "tr-TR.ts",
+      `export default { nav: { home: "" }, mask: "", cta: "" };`
+    );
+    writeLocale("en-US.ts", `export default { nav: { home: "Home" }, mask: "••••••••", cta: "Go" };`);
+    const { strategy } = makeEchoStrategy();
+    const service = new LocaleTranslateService(repository, strategy, reporter);
+
+    const result = await service.run({ localesDir: "src/locales", baseLang: "en-US" });
+
+    expect(result.totalKeysTranslated).toBe(2);
+    const written = readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8");
+    expect(written).toContain("••••••••");
+    expect(written).not.toContain("••••••••!");
+  });
+
   it("dry-run performs no writes", async () => {
     writeLocale("tr-TR.ts", `export default { nav: { home: "" } };`);
     const before = readFileSync(join(projectRoot, "src/locales/tr-TR.ts"), "utf-8");

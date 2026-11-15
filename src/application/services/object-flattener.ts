@@ -12,6 +12,13 @@ interface LeafToTranslate {
   readonly text: string;
 }
 
+/** Locale-invariant leaves: password masks, symbols, punctuation-only strings. */
+const HAS_LETTER_PATTERN = /\p{L}/u;
+
+function hasLetter(text: string): boolean {
+  return HAS_LETTER_PATTERN.test(text);
+}
+
 export class ObjectTreeWalker {
 
   collectLeaves(
@@ -42,6 +49,13 @@ export class ObjectTreeWalker {
         if (typeof srcValue !== "string") continue;
         if (isOpaqueExpression(srcValue)) continue;
         if (isOpaqueExpression(tgtValue)) continue;
+
+        if (!hasLetter(srcValue)) {
+          if (needsTranslation(tgtValue)) {
+            tgt[key] = srcValue;
+          }
+          continue;
+        }
 
         if (!force && !needsTranslation(tgtValue)) continue;
 
