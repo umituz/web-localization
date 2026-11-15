@@ -1,0 +1,169 @@
+import * as fs from "fs";
+import * as path from "path";
+import { InvalidConfigError } from "../../core/errors";
+import {
+  getLanguageDisplayName,
+  getSupportedLocaleCodes,
+  isSupportedLocale,
+} from "../../core/constants/languages.constants";
+import { LocaleFileRepository } from "../persistence/locale-file.repository";
+import type { ProgressReporter } from "./progress-reporter";
+
+export interface SetupCommandOptions {
+  readonly localesDir: string;
+  readonly baseLang: string;
+  /** Explicit locale codes to create (validated against LANGUAGE_MAP). */
+  readonly languages?: readonly string[];
+  /** Create stubs for every supported locale (English variants except base). */
+  readonly all?: boolean;
+  readonly dryRun?: boolean;
+}
+
+export interface SetupResult {
+  readonly createdLocales: readonly string[];
+  readonly existingLocales: readonly string[];
+  readonly baseFileCreated: boolean;
+  readonly indexLanguages: readonly string[];
+  readonly indexWritten: boolean;
+}
+
+export class LocaleSetupService {
+  constructor(
+    private readonly repository: LocaleFileRepository,
+    private readonly reporter: ProgressReporter
+  ) {}
+
+  async run(options: SetupCommandOptions): Promise<SetupResult> {
+    const targetLocales = this.resolveTargetLocales(options);
+
+    const localesDir = path.resolve(this.repository.root, options.localesDir);
+    if (!fs.existsSync(localesDir)) {
+      if (!options.dryRun) {
+        await fs.promises.mkdir(localesDir, { recursive: true });
+      }
+      this.reporter.info(`Created locales directory: ${options.localesDir}`);
+    }
+
+    const createdLocales: string[] = [];
+    const existingLocales: string[] = [];
+
+    // Ensure the base file exists — everything else syncs from it.
+    const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
+    let baseFileCreated = false;
+    if (!fs.existsSync(baseLangPath)) {
+      if (!options.dryRun) {
+        await this.repository.write(baseLangPath, {}, options.baseLang);
+      }
+      baseFileCreated = true;
+      this.reporter.success(
+        `${options.baseLang}: created base file${options.dryRun ? " (dry run, not saved)" : ""}.`
+      );
+    }
+
+    for (const langCode of targetLocales) {
+      const localePath = path.join(localesDir, `${langCode}.ts`);
+      if (fs.existsSync(localePath)) {
+        existingLocales.push(langCode);
+        continue;
+      }
+      if (!options.dryRun) {
+        await this.repository.write(localePath, {}, langCode);
+      }
+      createdLocales.push(langCode);
+      this.reporter.success(
+        `${langCode}: created stub (${getLanguageDisplayName(langCode)})${options.dryRun ? " (dry run, not saved)" : ""}.`
+      );
+    }
+
+    if (existingLocales.length > 0) {
+      this.reporter.info(`Already present: ${existingLocales.join(", ")}.`);
+    }
+
+    // Regenerate the barrel index from every locale file on disk.
+    const indexLanguages = (await this.repository.listLocales(localesDir)).slice();
+    if (!options.dryRun) {
+      fs.writeFileSync(path.join(localesDir, "index.ts"), buildIndexContent(indexLanguages));
+    }
+    this.reporter.success(
+      `index.ts: generated with ${indexLanguages.length} languages${options.dryRun ? " (dry run, not saved)" : ""}.`
+    );
+
+    return {
+      createdLocales,
+      existingLocales,
+      baseFileCreated,
+      indexLanguages,
+      indexWritten: !options.dryRun,
+    };
+  }
+
+  private resolveTargetLocales(options: SetupCommandOptions): string[] {
+    const requested =
+      options.all === true
+        ? getSupportedLocaleCodes().filter(
+            (code) => !code.startsWith("en-") || code === options.baseLang
+          )
+        : options.languages ?? [];
+
+    if (requested.length === 0) {
+      throw new InvalidConfigError(
+        "languages",
+        options.languages,
+        "pass --languages <list> or --all (see web-loc setup --help)"
+      );
+    }
+
+    const unsupported = requested.filter((code) => !isSupportedLocale(code));
+    if (unsupported.length > 0) {
+      throw new InvalidConfigError(
+        "languages",
+        unsupported,
+        `unsupported locale code(s); supported: ${getSupportedLocaleCodes().join(", ")}`
+      );
+    }
+
+    const unique = [...new Set(requested)].filter((code) => code !== options.baseLang);
+    unique.sort();
+    return unique;
+  }
+}
+
+/**
+ * Builds the barrel `index.ts` re-exporting every locale file:
+ *
+ *   import enUS from "./en-US";
+ *   export const translations = { "en-US": enUS, ... };
+ */
+export function buildIndexContent(langCodes: readonly string[]): string {
+  const imports = langCodes.map((code) => {
+    const varName = toVariableName(code);
+    return `import ${varName} from "./${code}";`;
+  });
+
+  const entries = langCodes.map((code) => `  "${code}": ${toVariableName(code)},`);
+
+  return [
+    "/**",
+    " * Localization Index",
+    " * Exports all available translation files",
+    " * Auto-generated by @umituz/web-localization (web-loc setup)",
+    " */",
+    "",
+    ...imports,
+    "",
+    "export const translations = {",
+    ...entries,
+    "};",
+    "",
+    "export type TranslationKey = keyof typeof translations;",
+    "",
+    "export default translations;",
+    "",
+  ].join("\n");
+}
+
+function toVariableName(localeCode: string): string {
+  // "en-US" → "enUS", "de-DE" → "deDE" — same convention as the React Native
+  // package's setup script and existing project barrels.
+  return localeCode.replace(/-/g, "");
+}

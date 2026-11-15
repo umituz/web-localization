@@ -3,7 +3,15 @@ import { Semaphore } from "../../core/utils/semaphore";
 import { LocaleFileNotFoundError } from "../../core/errors";
 import { RATE_LIMIT } from "../../core/constants";
 import { LocaleFileRepository, syncObjectStructure } from "../persistence/locale-file.repository";
+import { SourceKeyScanner } from "../scanning/source-key.scanner";
+import {
+  flattenToDottedPaths,
+  pruneToPaths,
+  setByDottedPath,
+} from "../../application/services/dotted-key-helper";
 import type { ProgressReporter } from "./progress-reporter";
+
+const MAX_REPORTED_KEYS = 10;
 
 export interface SyncCommandOptions {
   readonly localesDir: string;
@@ -11,6 +19,23 @@ export interface SyncCommandOptions {
   readonly concurrency?: number;
   readonly languages?: readonly string[];
   readonly dryRun?: boolean;
+  /**
+   * Source directory scanned for used translation keys (e.g. "src"). When
+   * provided, keys referenced by code but missing from the base locale are
+   * added with an empty value for human follow-up.
+   */
+  readonly srcDir?: string;
+  /** Remove base keys not referenced by the scanned source. Requires srcDir. */
+  readonly prune?: boolean;
+}
+
+export interface SourceScanSummary {
+  readonly srcDir: string;
+  readonly usedKeyCount: number;
+  readonly keysAddedToBase: readonly string[];
+  readonly unusedKeys: readonly string[];
+  readonly keysPrunedFromBase: readonly string[];
+  readonly baseFileUpdated: boolean;
 }
 
 export interface SyncLanguageResult {
@@ -26,6 +51,7 @@ export interface SyncResult {
   readonly languagesSucceeded: number;
   readonly languagesFailed: number;
   readonly results: readonly SyncLanguageResult[];
+  readonly sourceScan?: SourceScanSummary;
 }
 
 export class LocaleSyncService {
@@ -39,9 +65,24 @@ export class LocaleSyncService {
     const localesDir = path.resolve(this.repository.root, options.localesDir);
     const baseLangPath = path.join(localesDir, `${options.baseLang}.ts`);
 
-    const baseData = await this.repository.read(baseLangPath);
+    let baseData = await this.repository.read(baseLangPath);
     if (baseData === null) {
       throw new LocaleFileNotFoundError(baseLangPath);
+    }
+
+    let sourceScan: SourceScanSummary | undefined;
+    if (options.srcDir) {
+      const scanOutcome = await this.applySourceScan({
+        srcDir: options.srcDir,
+        prune: options.prune === true,
+        dryRun: options.dryRun === true,
+        localesDir,
+        baseLangPath,
+        baseLang: options.baseLang,
+        baseData,
+      });
+      baseData = scanOutcome.baseData;
+      sourceScan = scanOutcome.summary;
     }
 
     const locales = await this.repository.listLocales(localesDir);
@@ -58,7 +99,13 @@ export class LocaleSyncService {
 
     if (targets.length === 0) {
       this.reporter.warning("No target languages to sync.");
-      return { languagesProcessed: 0, languagesSucceeded: 0, languagesFailed: 0, results: [] };
+      return {
+        languagesProcessed: 0,
+        languagesSucceeded: 0,
+        languagesFailed: 0,
+        results: [],
+        ...(sourceScan ? { sourceScan } : {}),
+      };
     }
 
     const semaphore = new Semaphore(options.concurrency ?? RATE_LIMIT.DEFAULT_CONCURRENCY);
@@ -115,8 +162,92 @@ export class LocaleSyncService {
       languagesSucceeded: succeeded,
       languagesFailed: failed,
       results,
+      ...(sourceScan ? { sourceScan } : {}),
     };
   }
+
+  private async applySourceScan(params: {
+    srcDir: string;
+    prune: boolean;
+    dryRun: boolean;
+    localesDir: string;
+    baseLangPath: string;
+    baseLang: string;
+    baseData: Record<string, unknown>;
+  }): Promise<{ baseData: Record<string, unknown>; summary: SourceScanSummary }> {
+    const scanner = new SourceKeyScanner({
+      projectRoot: this.repository.root,
+      excludeAbsolutePaths: [params.localesDir],
+    });
+
+    const usedKeys = scanner.scan(params.srcDir);
+    this.reporter.info(
+      `Source scan (${params.srcDir}): ${usedKeys.size} unique keys referenced in code.`
+    );
+
+    const leaves = flattenToDottedPaths(params.baseData);
+
+    // Keys used in code but absent from the base locale: add as empty strings
+    // so `web-loc translate` never invents source copy — humans fill the base.
+    const keysAddedToBase: string[] = [];
+    for (const dottedPath of usedKeys.keys()) {
+      if (leaves.has(dottedPath)) continue;
+      if (setByDottedPath(params.baseData, dottedPath, "")) {
+        keysAddedToBase.push(dottedPath);
+      }
+    }
+    if (keysAddedToBase.length > 0) {
+      this.reporter.success(
+        `${params.baseLang}: +${keysAddedToBase.length} keys from source (${formatKeyList(keysAddedToBase)}) — fill their base text, then run translate.`
+      );
+    }
+
+    // Base keys never referenced by code.
+    const unusedKeys = [...leaves.keys()].filter((p) => !usedKeys.has(p)).sort();
+
+    let keysPrunedFromBase: string[] = [];
+    if (params.prune) {
+      if (usedKeys.size === 0) {
+        this.reporter.warning(
+          "Source scan found 0 keys — pruning skipped to protect the base file."
+        );
+      } else if (unusedKeys.length > 0) {
+        const pruneResult = pruneToPaths(params.baseData, new Set(usedKeys.keys()));
+        params.baseData = pruneResult.pruned;
+        keysPrunedFromBase = [...pruneResult.removedPaths].sort();
+        this.reporter.success(
+          `${params.baseLang}: pruned ${keysPrunedFromBase.length} unused keys (${formatKeyList(keysPrunedFromBase)}).`
+        );
+      }
+    } else if (unusedKeys.length > 0) {
+      this.reporter.warning(
+        `${params.baseLang}: ${unusedKeys.length} keys unused in source (${formatKeyList(unusedKeys)}) — pass --prune to remove.`
+      );
+    }
+
+    const baseFileUpdated =
+      keysAddedToBase.length > 0 || keysPrunedFromBase.length > 0;
+    if (baseFileUpdated && !params.dryRun) {
+      await this.repository.write(params.baseLangPath, params.baseData, params.baseLang);
+    }
+
+    return {
+      baseData: params.baseData,
+      summary: {
+        srcDir: params.srcDir,
+        usedKeyCount: usedKeys.size,
+        keysAddedToBase,
+        unusedKeys,
+        keysPrunedFromBase,
+        baseFileUpdated,
+      },
+    };
+  }
+}
+
+function formatKeyList(keys: readonly string[]): string {
+  const shown = keys.slice(0, MAX_REPORTED_KEYS).map((key) => `"${key}"`).join(", ");
+  return keys.length > MAX_REPORTED_KEYS ? `${shown}, … (+${keys.length - MAX_REPORTED_KEYS} more)` : shown;
 }
 
 function diffKeys(

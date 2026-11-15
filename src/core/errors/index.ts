@@ -10,4 +10,5 @@ export {
   TranslationAbortedError,
   InvalidConfigError,
   AlreadyInitializedError,
+  SourceDirectoryNotFoundError,
 } from "./localization.errors";

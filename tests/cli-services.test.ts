@@ -8,7 +8,7 @@ import { LocaleTranslateService } from "../src/infrastructure/cli/locale-transla
 import {
   NullProgressReporter,
 } from "../src/infrastructure/cli/progress-reporter";
-import { LocaleFileNotFoundError } from "../src/core/errors";
+import { LocaleFileNotFoundError, SourceDirectoryNotFoundError } from "../src/core/errors";
 import type { ITranslationStrategy } from "../src/domain/interfaces/translation-service.interface";
 import { TranslationStats } from "../src/domain/entities/translation.entity";
 import { ProgressEmitter, NullProgressEmitter } from "../src/core/utils/progress-emitter";
@@ -71,6 +71,21 @@ function writeLocale(name: string, content: string): void {
   writeFileSync(join(projectRoot, "src/locales", name), content);
 }
 
+function writeSource(relativePath: string, content: string): void {
+  const fullPath = join(projectRoot, relativePath);
+  mkdirSync(join(fullPath, ".."), { recursive: true });
+  writeFileSync(fullPath, content);
+}
+
+function readLocaleObject(name: string): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(join(projectRoot, "src/locales", name), "utf-8").replace(
+      /^[\s\S]*?export default /,
+      ""
+    ).replace(/;\s*$/, "")
+  );
+}
+
 beforeEach(() => {
   projectRoot = mkdtempSync(join(tmpdir(), "wl-cli-"));
   repository = new LocaleFileRepository({ projectRoot });
@@ -127,6 +142,91 @@ describe("LocaleSyncService", () => {
     await expect(
       service.run({ localesDir: "src/locales", baseLang: "xx-XX" })
     ).rejects.toThrow(LocaleFileNotFoundError);
+  });
+});
+
+describe("LocaleSyncService — source scan", () => {
+  it("adds keys found in code to the base locale as empty strings and syncs them out", async () => {
+    writeSource("src/app.tsx", `const title = t("nav.dashboard.new");`);
+    writeLocale("tr-TR.ts", `export default { nav: { home: "Ana Sayfa" } };`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+    });
+
+    expect(result.sourceScan?.usedKeyCount).toBeGreaterThan(0);
+    expect(result.sourceScan?.keysAddedToBase).toEqual(["nav.dashboard.new"]);
+    expect(result.sourceScan?.baseFileUpdated).toBe(true);
+
+    expect(readLocaleObject("en-US.ts")).toEqual({
+      nav: { home: "Home", dashboard: { new: "" } },
+      cta: "Go",
+    });
+    expect(readLocaleObject("tr-TR.ts")).toEqual({
+      nav: { home: "Ana Sayfa", dashboard: { new: "" } },
+      cta: "",
+    });
+  });
+
+  it("reports unused base keys without removing them when prune is off", async () => {
+    writeSource("src/app.tsx", `const title = t("nav.home");`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+    });
+
+    expect(result.sourceScan?.unusedKeys).toEqual(["cta"]);
+    expect(result.sourceScan?.keysPrunedFromBase).toEqual([]);
+    // Base was not rewritten (nothing added/pruned) — fixture stays untouched.
+    expect(readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8"))
+      .toContain(`cta: "Go"`);
+  });
+
+  it("prunes unused keys from the base and propagates removals to targets", async () => {
+    writeSource("src/app.tsx", `const title = t("nav.home");`);
+    writeLocale("tr-TR.ts", `export default { nav: { home: "Ana Sayfa" }, cta: "Git" };`);
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+      prune: true,
+    });
+
+    expect(result.sourceScan?.keysPrunedFromBase).toEqual(["cta"]);
+    expect(readLocaleObject("en-US.ts")).toEqual({ nav: { home: "Home" } });
+    expect(readLocaleObject("tr-TR.ts")).toEqual({ nav: { home: "Ana Sayfa" } });
+    expect(result.results[0]).toMatchObject({ language: "tr-TR", keysRemoved: 1 });
+  });
+
+  it("dry-run performs the scan but writes neither base nor targets", async () => {
+    writeSource("src/app.tsx", `const title = t("nav.dashboard.new");`);
+    const before = readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8");
+    const service = new LocaleSyncService(repository, reporter);
+
+    const result = await service.run({
+      localesDir: "src/locales",
+      baseLang: "en-US",
+      srcDir: "src",
+      dryRun: true,
+    });
+
+    expect(result.sourceScan?.keysAddedToBase).toEqual(["nav.dashboard.new"]);
+    expect(readFileSync(join(projectRoot, "src/locales/en-US.ts"), "utf-8")).toBe(before);
+  });
+
+  it("throws typed SourceDirectoryNotFoundError for a missing source dir", async () => {
+    const service = new LocaleSyncService(repository, reporter);
+    await expect(
+      service.run({ localesDir: "src/locales", baseLang: "en-US", srcDir: "no-such-dir" })
+    ).rejects.toThrow(SourceDirectoryNotFoundError);
   });
 });
 

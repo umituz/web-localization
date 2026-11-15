@@ -20,6 +20,13 @@ export { TextValidator } from "./application/services/text-validator";
 export { VariableProtector } from "./application/services/variable-protector";
 export { TranslationCache } from "./application/services/translation-cache";
 export { ObjectTreeWalker } from "./application/services/object-flattener";
+export { extractKeysFromContent } from "./application/services/source-key-extractor";
+export {
+  setByDottedPath,
+  flattenToDottedPaths,
+  pruneToPaths,
+} from "./application/services/dotted-key-helper";
+export type { PruneResult } from "./application/services/dotted-key-helper";
 
 export {
   computeExponentialBackoff,
@@ -70,6 +77,9 @@ export type {
 
 export { GoogleTranslateHttpClient } from "./infrastructure/http/translation-http.client";
 
+export { SourceKeyScanner } from "./infrastructure/scanning/source-key.scanner";
+export type { SourceKeyScannerOptions } from "./infrastructure/scanning/source-key.scanner";
+
 export {
   LocaleFileRepository,
   syncObjectStructure,
@@ -88,6 +98,7 @@ export {
   TranslationAbortedError,
   InvalidConfigError,
   AlreadyInitializedError,
+  SourceDirectoryNotFoundError,
 } from "./core/errors";
 
 export type { Result, LanguageCode, Iso639Code, AbsolutePath } from "./core/types";
@@ -114,6 +125,13 @@ export type {
 } from "./core/utils";
 
 export { HTTP, RATE_LIMIT, CACHE, LOCALE, GOOGLE_TRANSLATE, UI } from "./core/constants";
+export {
+  LANGUAGE_MAP,
+  LANGUAGE_NAMES,
+  getLanguageDisplayName,
+  isSupportedLocale,
+  getSupportedLocaleCodes,
+} from "./core/constants/languages.constants";
 
 export type {
   SetupI18nOptions,

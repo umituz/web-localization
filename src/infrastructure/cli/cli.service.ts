@@ -2,10 +2,15 @@ import { LocaleFileRepository } from "../persistence/locale-file.repository";
 import { googleTranslateService } from "../../application/strategies/google-translate.strategy";
 import { LocaleSyncService, type SyncCommandOptions } from "./locale-sync.service";
 import { LocaleTranslateService, type TranslateCommandOptions } from "./locale-translate.service";
+import {
+  LocaleSetupService,
+  type SetupCommandOptions,
+} from "./locale-setup.service";
 import { ConsoleProgressReporter } from "./progress-reporter";
 
 export type SyncOptions = SyncCommandOptions;
 export type TranslateOptions = TranslateCommandOptions;
+export type SetupOptions = SetupCommandOptions;
 
 class CLIService {
   private readonly repository: LocaleFileRepository;
@@ -25,6 +30,25 @@ class CLIService {
     const totalAdded = result.results.reduce((sum, r) => sum + r.keysAdded, 0);
     const totalRemoved = result.results.reduce((sum, r) => sum + r.keysRemoved, 0);
     this.reporter.data(`Keys:       +${totalAdded} added, -${totalRemoved} removed`);
+    if (result.sourceScan) {
+      const scan = result.sourceScan;
+      this.reporter.data(
+        `Source:     ${scan.usedKeyCount} keys referenced; base +${scan.keysAddedToBase.length} added, -${scan.keysPrunedFromBase.length} pruned, ${scan.unusedKeys.length} unused`
+      );
+    }
+    if (options.dryRun) this.reporter.warning("Dry run — no files were modified.");
+  }
+
+  async setup(options: SetupOptions): Promise<void> {
+    const service = new LocaleSetupService(this.repository, this.reporter);
+    const result = await service.run(options);
+
+    this.reporter.header("Setup Summary");
+    this.reporter.data(
+      `Created:    ${result.createdLocales.join(", ") || "none"}${result.baseFileCreated ? ` (+ base ${options.baseLang})` : ""}`
+    );
+    this.reporter.data(`Existing:   ${result.existingLocales.join(", ") || "none"}`);
+    this.reporter.data(`Index:      ${result.indexLanguages.length} languages`);
     if (options.dryRun) this.reporter.warning("Dry run — no files were modified.");
   }
 

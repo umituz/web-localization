@@ -8,8 +8,13 @@ auto-fills missing translations via Google Translate.
 
 - **i18n runtime** — `setupI18n()` wires i18next + react-i18next + language
   detection with sensible, overridable defaults.
+- **Scaffolding** — `web-loc setup` creates locale stub files and generates the
+  `index.ts` barrel for every locale on disk.
 - **Key synchronization** — `web-loc sync` mirrors the base language's key
   structure onto every other locale file (adds missing keys, removes stale ones).
+- **Source-code key extraction** — `web-loc sync --src-dir src` scans your code
+  (plus `node_modules/@umituz`) for `t("key")` usages, adds missing keys to the
+  base locale, reports unused keys, and `--prune` removes them.
 - **Auto-translation** — `web-loc translate` fills empty keys using Google
   Translate, with `{{placeholder}}` protection, caching, rate limiting,
   bounded concurrency, retries with exponential backoff, and AbortSignal support.
@@ -107,8 +112,18 @@ export default {
 ```
 
 ```bash
+# Scaffold locale stubs and the index.ts barrel
+npx web-loc setup --locales-dir src/locales --languages tr-TR,de-DE
+npx web-loc setup --all              # every supported locale
+
 # Mirror the base language's key structure onto all other locales
 npx web-loc sync --locales-dir src/locales --base-lang en-US
+
+# Also scan source code: add missing keys, report unused ones
+npx web-loc sync --src-dir src
+
+# …and remove base keys the code no longer references
+npx web-loc sync --src-dir src --prune
 
 # Auto-translate empty keys via Google Translate
 npx web-loc translate --locales-dir src/locales --base-lang en-US
@@ -119,6 +134,27 @@ npx web-loc translate --locales-dir src/locales --base-lang en-US --dry-run
 
 Common options: `--languages tr-TR,de-DE` (subset), `--concurrency 10`,
 `--force` (re-translate), `--max-keys 200` (cap per language).
+
+#### The full workflow
+
+```bash
+web-loc setup --languages tr-TR,de-DE   # 1. scaffold languages
+web-loc sync --src-dir src               # 2. code → base keys (+ report unused)
+web-loc sync                             # 3. base → every language
+web-loc translate                        # 4. fill every empty key via Google
+```
+
+Source-scan notes:
+
+- Keys found in code but missing from the base locale are added **with an
+  empty value** — fill the base text, then run `translate` (the package never
+  invents source copy).
+- The scanner recognizes `t('a.b.c')` (with or without an options argument),
+  dot-notation literals with 2+ dots, and `t(\`prefix.${id}\`)` template
+  literals expanded against array literals — same heuristics as
+  `@umituz/react-native-google-translate`.
+- `--prune` is opt-in and refuses to run when the scan finds zero keys, so a
+  broken scan can never wipe your base file. Use `--dry-run` to preview.
 
 ### 3. Translation service (library API)
 
@@ -152,10 +188,12 @@ its rate limits. The `apiKey` config field is deprecated and ignored.
 
 - `domain/` — entities (`TranslationStats`) and the `ITranslationStrategy` contract.
 - `application/` — pure calculations & validations, plus stateful services
-  (cache, placeholder protection, tree walking).
-- `infrastructure/` — HTTP client, locale-file repository, CLI services.
+  (cache, placeholder protection, tree walking, source-key extraction,
+  dotted-path helpers).
+- `infrastructure/` — HTTP client, locale-file repository, source scanner,
+  CLI services (setup / sync / translate).
 - `core/` — cross-cutting primitives: typed errors, branded types, LRU cache,
-  semaphore, rate limiter, retry policy.
+  semaphore, rate limiter, retry policy, language constants.
 - `integrations/` — i18next setup composing the above for React apps.
 - `scripts/` — the `web-loc` binary entry.
 

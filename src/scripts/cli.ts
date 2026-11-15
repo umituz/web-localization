@@ -20,6 +20,41 @@ program
   .version(packageJson.version);
 
 program
+  .command("setup")
+  .description("Create locale stub files and generate the locales index.ts")
+  .option("-d, --locales-dir <dir>", "Directory containing locale files", LOCALE.DEFAULT_LOCALES_DIR)
+  .option("-b, --base-lang <lang>", "Base language code", LOCALE.DEFAULT_BASE_LANGUAGE)
+  .option(
+    "-l, --languages <list>",
+    "Comma-separated list of locale codes to create (e.g. tr-TR,de-DE)"
+  )
+  .option("--all", "Create stubs for every supported locale", false)
+  .option("--dry-run", "Show what would change without writing files", false)
+  .action(
+    async (opts: {
+      localesDir: string;
+      baseLang: string;
+      languages?: string;
+      all: boolean;
+      dryRun: boolean;
+    }) => {
+      try {
+        await cliService.setup({
+          localesDir: opts.localesDir,
+          baseLang: opts.baseLang,
+          languages: parseList(opts.languages),
+          all: opts.all,
+          dryRun: opts.dryRun,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`[ERR] Setup failed: ${message}\n`);
+        process.exit(1);
+      }
+    }
+  );
+
+program
   .command("sync")
   .description("Synchronize missing keys from base language to other languages")
   .option("-d, --locales-dir <dir>", "Directory containing locale files", LOCALE.DEFAULT_LOCALES_DIR)
@@ -29,6 +64,11 @@ program
     "-l, --languages <list>",
     "Comma-separated list of languages to sync (default: all)"
   )
+  .option(
+    "-s, --src-dir <dir>",
+    "Scan source code for used translation keys (adds missing keys to the base locale)"
+  )
+  .option("--prune", "Remove base keys unused by the scanned source (requires --src-dir)", false)
   .option("--dry-run", "Show what would change without writing files", false)
   .action(
     async (opts: {
@@ -36,6 +76,8 @@ program
       baseLang: string;
       concurrency: string;
       languages?: string;
+      srcDir?: string;
+      prune: boolean;
       dryRun: boolean;
     }) => {
       try {
@@ -44,6 +86,8 @@ program
           baseLang: opts.baseLang,
           concurrency: parsePositiveInt(opts.concurrency, 10),
           languages: parseList(opts.languages),
+          ...(opts.srcDir ? { srcDir: opts.srcDir } : {}),
+          ...(opts.srcDir ? { prune: opts.prune } : {}),
           dryRun: opts.dryRun,
         });
       } catch (error) {

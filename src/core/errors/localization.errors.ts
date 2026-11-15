@@ -103,3 +103,10 @@ export class AlreadyInitializedError extends LocalizationError {
     super(`${context} is already initialized`);
   }
 }
+
+export class SourceDirectoryNotFoundError extends LocalizationError {
+  readonly code = "SOURCE_DIR_NOT_FOUND";
+  constructor(public readonly sourceDir: string) {
+    super(`Source directory not found: ${sourceDir}`);
+  }
+}
