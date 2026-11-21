@@ -1,3 +1,4 @@
+import type { InterpolationOptions } from "i18next";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
@@ -133,7 +134,6 @@ function buildInitOptions<Lng extends string>(
     resources: lazyLoad ? undefined : bundled,
     lng: bootLanguage,
     fallbackLng: plan.fallbackLanguage,
-    initImmediate: false,
     load: lazyLoad ? "languageOnly" : "all",
     preload: lazyLoad ? [] : undefined,
     ...(lazyLoad
@@ -144,8 +144,8 @@ function buildInitOptions<Lng extends string>(
     saveMissing,
     interpolation: {
       escapeValue: false,
-      format: (value, format) => applyTextCase(value, format),
-    },
+      format: (value: unknown, format?: string) => applyTextCase(value, format),
+    } as InterpolationOptions,
     detection: {
       order: [],
       caches: [...(detection.caches ?? DETECTION_CACHES)],

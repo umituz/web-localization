@@ -34,8 +34,8 @@ const ReactiveI18nProvider = ({ i18n, children }: { i18n: I18nInstanceLike; chil
   }, [i18n]);
 
   const t = useMemo(() => {
-    const bound = i18n.t.bind(i18n);
-    return (key: string, params?: Record<string, unknown>) => bound(key, params);
+    const bound = i18n.t.bind(i18n) as TranslateFn;
+    return (key: string, params?: Record<string, unknown>) => (params ? bound(key, params) : bound(key));
   }, [i18n, language]);
 
   return createElement(
