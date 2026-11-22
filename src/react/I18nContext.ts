@@ -92,8 +92,12 @@ const ReactiveI18nProvider = ({
   );
 
   const t = useMemo(() => {
-    const bound = i18n.t.bind(i18n) as TranslateFn;
-    return (key: string, params?: Record<string, unknown>) => (params ? bound(key, params) : bound(key));
+    const raw = i18n.t;
+    const bound = typeof raw === "function" ? (raw as (...args: unknown[]) => unknown).bind(i18n) : defaultT;
+    return (key: string, params?: Record<string, unknown>) => {
+      const res = params ? (bound as TranslateFn)(key, params) : (bound as TranslateFn)(key);
+      return typeof res === "string" ? res : String(res ?? key);
+    };
   }, [i18n, language]);
 
   return createElement(
