@@ -5,7 +5,7 @@ export type TranslateFn = (
 ) => string;
 
 export interface I18nInstanceLike {
-  t: TranslateFn | ((...args: unknown[]) => unknown);
+  t(key: string, ...args: unknown[]): unknown;
   language: string;
   changeLanguage?(lng: string): Promise<unknown> | unknown;
   on(event: "languageChanged", listener: (lng: string) => void): unknown;
