@@ -153,9 +153,4 @@ export {
 } from "./core/constants/languages.constants";
 export type { LanguageMeta } from "./core/constants/languages.constants";
 
-export type {
-  SetupI18nOptions,
-  DetectionOptions,
-  I18nHandle,
-} from "./integrations/i18n.setup";
-export { setupI18n, resetI18n } from "./integrations/i18n.setup";
+export * from "./react";

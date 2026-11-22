@@ -269,7 +269,7 @@ function createHandle<Lng extends string>(
         throw error instanceof Error ? error : new Error(String(error));
       });
 
-    return initializationPromise;
+    return initializationPromise ?? Promise.resolve();
   };
 
   const assertInitialized = (): void => {
