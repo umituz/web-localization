@@ -141,10 +141,17 @@ export { HTTP, RATE_LIMIT, CACHE, LOCALE, GOOGLE_TRANSLATE, UI } from "./core/co
 export {
   LANGUAGE_MAP,
   LANGUAGE_NAMES,
+  LANGUAGE_METADATA,
   getLanguageDisplayName,
+  getLanguageNativeName,
+  getLanguageFlag,
+  getLanguageMetadata,
   isSupportedLocale,
   getSupportedLocaleCodes,
+  isRtlLocale,
+  findMatchingLocale,
 } from "./core/constants/languages.constants";
+export type { LanguageMeta } from "./core/constants/languages.constants";
 
 export type {
   SetupI18nOptions,
