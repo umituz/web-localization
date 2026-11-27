@@ -26,6 +26,8 @@ export interface SetupI18nOptions<Lng extends string = string> {
   readonly lazyLoad?: boolean;
   readonly saveMissing?: boolean;
   readonly reactUseSuspense?: boolean;
+  readonly rtlLanguages?: readonly string[];
+  readonly returnEmptyString?: boolean;
 }
 
 export interface I18nHandle<Lng extends string = string> {
@@ -142,6 +144,7 @@ function buildInitOptions<Lng extends string>(
     ns: ["translation"],
     defaultNS: "translation",
     saveMissing,
+    returnEmptyString: options.returnEmptyString ?? true,
     interpolation: {
       escapeValue: false,
       format: (value: unknown, format?: string) => applyTextCase(value, format),
@@ -184,18 +187,37 @@ function bindLanguageEffects<Lng extends string>(
   const cleanups: (() => void)[] = [];
   const initialDocumentLang =
     typeof document !== "undefined" ? document.documentElement.lang : null;
+  const initialDocumentDir =
+    typeof document !== "undefined" ? document.documentElement.getAttribute("dir") : null;
+  const rtlLanguages = options.rtlLanguages ?? [];
+
+  const applyDirection = (lng: string): void => {
+    if (typeof document === "undefined" || rtlLanguages.length === 0) return;
+    document.documentElement.setAttribute(
+      "dir",
+      rtlLanguages.includes(lng) ? "rtl" : "ltr"
+    );
+  };
 
   const listener = (raw: string) => {
     const lng = resolveConfiguredLanguage(plan, raw);
     setCurrentLanguage(lng);
     if (typeof document !== "undefined") document.documentElement.lang = lng;
+    applyDirection(lng);
   };
   listener(i18n.resolvedLanguage ?? i18n.language);
   i18n.on("languageChanged", listener);
   cleanups.push(() => {
     i18n.off("languageChanged", listener);
-    if (typeof document !== "undefined" && initialDocumentLang !== null) {
-      document.documentElement.lang = initialDocumentLang;
+    if (typeof document !== "undefined") {
+      if (initialDocumentLang !== null) {
+        document.documentElement.lang = initialDocumentLang;
+      }
+      if (initialDocumentDir !== null) {
+        document.documentElement.setAttribute("dir", initialDocumentDir);
+      } else {
+        document.documentElement.removeAttribute("dir");
+      }
     }
   });
 
@@ -253,11 +275,12 @@ function createHandle<Lng extends string>(
   const start = (): Promise<void> => {
     if (initializationPromise) return initializationPromise;
 
-    initializationPromise = i18n
+    const pending: Promise<void> = i18n
       .use(LanguageDetector)
       .use(initReactI18next)
       .init(initOptions)
       .then(() => {
+        if (initializationPromise !== pending) return;
         initialized = true;
         detachEffects = bindLanguageEffects(plan, options, (lng) => {
           currentLanguage = lng;
@@ -265,9 +288,10 @@ function createHandle<Lng extends string>(
         if (options.onInit) options.onInit(i18n);
       })
       .catch((error: unknown) => {
-        initializationPromise = null;
+        if (initializationPromise === pending) initializationPromise = null;
         throw error instanceof Error ? error : new Error(String(error));
       });
+    initializationPromise = pending;
 
     return initializationPromise ?? Promise.resolve();
   };

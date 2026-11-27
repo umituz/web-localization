@@ -132,3 +132,103 @@ describe("I18nHandle", () => {
     expect(() => handle.addLanguage("de", {})).toThrow(/not initialized/i);
   });
 });
+
+function stubDocument() {
+  const element = {
+    lang: "",
+    dir: null as string | null,
+    setAttribute(name: string, value: string) {
+      if (name === "dir") this.dir = value;
+    },
+    getAttribute(name: string) {
+      return name === "dir" ? this.dir : null;
+    },
+    removeAttribute(name: string) {
+      if (name === "dir") this.dir = null;
+    },
+  };
+  vi.stubGlobal("document", { documentElement: element });
+  return element;
+}
+
+describe("direction and empty-string handling", () => {
+  it("applies dir=rtl for configured rtl languages on boot", async () => {
+    const element = stubDocument();
+    const handle = setupI18n(
+      options({
+        resources: {
+          en: { translation: { hello: "Hello" } },
+          ar: { translation: { hello: "مرحبا" } },
+        } as Record<string, { translation: Record<string, unknown> }>,
+        initialLanguage: "ar",
+        rtlLanguages: ["ar", "he"],
+      })
+    );
+    await handle.whenReady();
+    expect(element.lang).toBe("ar");
+    expect(element.getAttribute("dir")).toBe("rtl");
+  });
+
+  it("flips dir when switching between rtl and ltr languages", async () => {
+    const element = stubDocument();
+    const handle = setupI18n(
+      options({
+        resources: {
+          en: { translation: { hello: "Hello" } },
+          ar: { translation: { hello: "مرحبا" } },
+        } as Record<string, { translation: Record<string, unknown> }>,
+        rtlLanguages: ["ar"],
+      })
+    );
+    await handle.whenReady();
+    expect(element.getAttribute("dir")).toBe("ltr");
+    await handle.changeLanguage("ar");
+    expect(element.getAttribute("dir")).toBe("rtl");
+    await handle.changeLanguage("en");
+    expect(element.getAttribute("dir")).toBe("ltr");
+  });
+
+  it("leaves the dir attribute untouched when rtlLanguages is not configured", async () => {
+    const element = stubDocument();
+    const handle = setupI18n(options());
+    await handle.whenReady();
+    expect(element.lang).toBe("en");
+    expect(element.getAttribute("dir")).toBeNull();
+  });
+
+  it("restores the original lang and dir after reset", async () => {
+    const element = stubDocument();
+    element.lang = "de";
+    element.setAttribute("dir", "auto");
+    const handle = setupI18n(
+      options({
+        rtlLanguages: ["ar"],
+      })
+    );
+    await handle.whenReady();
+    expect(element.lang).toBe("en");
+    expect(element.getAttribute("dir")).toBe("ltr");
+    handle.reset();
+    expect(element.lang).toBe("de");
+    expect(element.getAttribute("dir")).toBe("auto");
+  });
+
+  it("does not bind language effects when reset runs before initialization settles (regression)", async () => {
+    const element = stubDocument();
+    element.lang = "de";
+    const handle = setupI18n(options());
+    handle.reset();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(element.lang).toBe("de");
+  });
+
+  it("forwards returnEmptyString to i18next", async () => {
+    const strict = setupI18n(options({ returnEmptyString: false }));
+    await strict.whenReady();
+    expect(strict.instance.options.returnEmptyString).toBe(false);
+    resetI18n();
+    const permissive = setupI18n(options());
+    await permissive.whenReady();
+    expect(permissive.instance.options.returnEmptyString).not.toBe(false);
+  });
+});

@@ -98,6 +98,19 @@ function Nav() {
 `setupI18n` is idempotent for the same configuration and throws
 `AlreadyInitializedError` if recalled with different resources — call
 `resetI18n()` first if you really need to re-initialize (tests, full reloads).
+`reset()` while initialization is still pending cancels the pending bind (no
+orphaned `languageChanged` listeners).
+
+**RTL support** — pass `rtlLanguages` and the handle keeps
+`<html lang dir>` in sync on every language change (and restores both on
+`reset()`); without the option the `dir` attribute is never touched:
+
+```ts
+setupI18n({ resources, rtlLanguages: ["ar", "he"], returnEmptyString: false });
+```
+
+`returnEmptyString: false` forwards to i18next so empty catalog values fall
+back to the fallback language instead of rendering blank.
 
 Optional SEO integration (requires `@umituz/web-seo`):
 
